@@ -36,6 +36,41 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Branching family &amp; making nesting flat</span></div>
+      <svg viewBox="0 0 640 232" role="img" aria-label="Branching and threading">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">BRANCHING  &middot;  CHOOSE BY TEST KIND</text>
+        <rect x="18" y="34" width="120" height="30" rx="7" fill="#161d26" stroke="#58a6ff"/>
+        <text x="78" y="54" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="12">if</text>
+        <text x="150" y="52" fill="#9aa7b4" font-family="monospace" font-size="10">one test, two branches</text>
+        <rect x="18" y="72" width="120" height="30" rx="7" fill="#161d26" stroke="#63b132"/>
+        <text x="78" y="92" text-anchor="middle" fill="#63b132" font-family="monospace" font-size="12">when</text>
+        <text x="150" y="90" fill="#9aa7b4" font-family="monospace" font-size="10">body only if truthy (implicit do)</text>
+        <rect x="18" y="110" width="120" height="30" rx="7" fill="#161d26" stroke="#e3b341"/>
+        <text x="78" y="130" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="12">cond</text>
+        <text x="150" y="128" fill="#9aa7b4" font-family="monospace" font-size="10">test/expr pairs (like Kotlin when)</text>
+        <rect x="18" y="148" width="120" height="30" rx="7" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="78" y="168" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="12">case</text>
+        <text x="150" y="166" fill="#9aa7b4" font-family="monospace" font-size="10">compile-time constants, fast</text>
+        <text x="620" y="16" text-anchor="end" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">THREADING = FLAT PIPELINES</text>
+        <text x="430" y="52" fill="#f85149" font-family="monospace" font-size="11">nested : (f (g (h x)))</text>
+        <rect x="392" y="64" width="76" height="24" rx="6" fill="#161d26" stroke="#f85149"/>
+        <text x="430" y="81" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="11">f</text>
+        <rect x="392" y="92" width="76" height="24" rx="6" fill="#161d26" stroke="#f85149"/>
+        <text x="430" y="109" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="11">g</text>
+        <rect x="392" y="120" width="76" height="24" rx="6" fill="#161d26" stroke="#f85149"/>
+        <text x="430" y="137" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="11">h</text>
+        <text x="430" y="158" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">x</text>
+        <text x="500" y="100" text-anchor="middle" fill="#63b132" font-family="monospace" font-size="14" font-weight="700">&rarr;  -&gt;</text>
+        <text x="560" y="74" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">x</text>
+        <line x1="540" y1="84" x2="586" y2="84" stroke="#63b132" stroke-width="2"/>
+        <rect x="588" y="64" width="52" height="42" rx="7" fill="#161d26" stroke="#7ee787"/>
+        <text x="614" y="90" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="12">-&gt;&gt;</text>
+        <text x="232" y="212" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">-&gt; threads first (maps/objects) ; -&gt;&gt; threads last (collections) ; some-&gt; stops at nil</text>
+      </svg>
+      <figcaption><code>if</code>/<code>when</code>/<code>cond</code>/<code>case</code> cover branching; threading macros replace deep parentheses with a readable, left-to-right data flow.</figcaption>
+    </figure>
+
     <h2>The branching family</h2>
     <pre><code class="language-clojure">(if (&lt;= status 200) "ok" "problem")   ; one test, two branches
 
@@ -242,6 +277,17 @@
   [x y])
 ;=&gt; ([0 1] [0 2] ... [8 9])</code></pre>
       </details>
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>Branching:</strong> <code>if</code>, <code>when</code>/<code>when-let</code>, <code>if-let</code>, <code>cond</code>, <code>condp</code> and <code>case</code> (case is constant-matching and throws without a default).</li>
+        <li><strong>Looping without loops:</strong> <code>loop/recur</code> gives constant stack space (tail call), and <code>for</code>/<code>doseq</code> handle collection iteration.</li>
+        <li><strong>Error strategies:</strong> exceptions with <code>try/catch/finally</code> for control flow, plus <em>errors as data</em> &mdash; <code>ex-info</code>/<code>ex-data</code> carry structured details you can inspect in the REPL.</li>
+        <li><strong>Threading macros:</strong> <code>-&gt;</code> (threads first), <code>-&gt;&gt;</code> (threads last), <code>some-&gt;</code>/<code>cond-&gt;</code> for safe/conditional pipelines, <code>doto</code> for side-effecting duties.</li>
+        <li><strong>Looping is the exception, not the rule:</strong> prefer <code>map</code>/<code>filter</code>/<code>reduce</code>/<code>for</code> over an explicit loop.</li>
+      </ul>
     </div>
 
     <section class="exam">

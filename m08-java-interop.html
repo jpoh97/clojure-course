@@ -36,6 +36,35 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Clojure is a library on the JVM — call it all</span></div>
+      <svg viewBox="0 0 640 224" role="img" aria-label="Clojure to Java interop">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">FROM CLOJURE TO THE ENTIRE MAVEN/JVM WORLD</text>
+        <rect x="20" y="40" width="210" height="56" rx="9" fill="#161d26" stroke="#58a6ff"/>
+        <text x="125" y="58" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="12">Clojure form</text>
+        <text x="125" y="80" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">(.method obj) / (Class/static)</text>
+        <line x1="230" y1="68" x2="290" y2="68" stroke="#9aa7b4" stroke-width="2"/>
+        <text x="330" y="68" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="10">JVM</text>
+        <rect x="410" y="40" width="210" height="56" rx="9" fill="#161d26" stroke="#7ee787"/>
+        <text x="515" y="58" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="12">Java class / library</text>
+        <text x="515" y="80" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">Jackson, java.time, BigDecimal, HikariCP</text>
+        <text x="20" y="128" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">SYNTAX CHEAT-SHEET</text>
+        <rect x="20" y="138" width="180" height="26" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="110" y="157" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">(Math/abs -5)</text>
+        <text x="215" y="158" fill="#9aa7b4" font-family="monospace" font-size="11">static method / field</text>
+        <rect x="20" y="172" width="120" height="26" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="110" y="191" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">(java.util.Date.)</text>
+        <text x="160" y="191" fill="#9aa7b4" font-family="monospace" font-size="11">dot = constructor</text>
+        <rect x="520" y="142" width="104" height="26" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="572" y="161" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">(.. obj m1 m2)</text>
+        <text x="320" y="167" fill="#9aa7b4" font-family="monospace" font-size="11">chain calls</text>
+        <rect x="520" y="176" width="104" height="26" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="572" y="195" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">(doto obj .)</text>
+        <text x="320" y="195" fill="#9aa7b4" font-family="monospace" font-size="11">chained builder calls</text>
+      </svg>
+      <figcaption>Instance methods <code>(.m x)</code>, constructors <code>(Class.)</code>, statics <code>(Math/abs)</code>, chaining <code>..</code> and change-a-lot <code>doto</code> &mdash; then <code>defrecord</code>/<code>defprotocol</code> for typed, polymorphic domain values.</figcaption>
+    </figure>
+
     <h2>The interop syntax tour</h2>
     <pre><code class="language-clojure">;; instance method:
 (.toUpperCase "clojure")            ;=&gt; "CLOJURE"
@@ -235,6 +264,17 @@
 ;; Protocols can be implemented for any JVM class after the fact -
 ;; impossible with Java interfaces without wrappers.</code></pre>
       </details>
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>Call everything Java:</strong> instance methods <code>(.length s)</code>, constructors <code>(Date.)</code>, statics/fields <code>(Math/PI)</code>, and system calls <code>(System/getenv)</code>.</li>
+        <li><strong>Chaining &amp; building:</strong> <code>..</code> chains method calls, <code>doto</code> repeatedly mutates one receiver (efficient for builders).</li>
+        <li><strong>Leverage Java directly:</strong> <code>java.time</code>, <code>BigDecimal</code> for exact money, <code>UUID</code> &mdash; no Clojure wrappers needed.</li>
+        <li><strong>The whole Maven universe:</strong> declare Jackson, HikariCP, Kafka, AWS SDK in <code>deps.edn</code> exactly like Gradle coordinates.</li>
+        <li><strong>Typed data &amp; polymorphism:</strong> <code>defrecord</code> for immutable value objects (with map behavior + <code>assoc</code>), <code>defprotocol</code>/<code>extend-type</code>/<code>reify</code>, and <code>defmulti</code> for value-based dispatch.</li>
+      </ul>
     </div>
 
     <section class="exam">

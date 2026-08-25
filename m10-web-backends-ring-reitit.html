@@ -36,6 +36,39 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">HTTP as data: adapter → middleware → handler</span></div>
+      <svg viewBox="0 0 640 218" role="img" aria-label="Ring request response flow">
+        <rect x="16" y="40" width="92" height="52" rx="9" fill="#161d26" stroke="#58a6ff"/>
+        <text x="62" y="57" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">client</text>
+        <text x="62" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">HTTP</text>
+        <rect x="132" y="40" width="104" height="52" rx="9" fill="#161d26" stroke="#e3b341"/>
+        <text x="184" y="57" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">adapter</text>
+        <text x="184" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">Jetty/Undertow</text>
+        <rect x="280" y="40" width="120" height="52" rx="9" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="340" y="57" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="11">middleware</text>
+        <text x="340" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">wrap-json / wrap-errors / malli</text>
+        <rect x="444" y="40" width="120" height="52" rx="9" fill="#161d26" stroke="#7ee787"/>
+        <text x="504" y="57" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">handler</text>
+        <text x="504" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">(fn [request] response)</text>
+        <rect x="596" y="40" width="28" height="52" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="620" y="66" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">...</text>
+        <line x1="88" y1="57" x2="128" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="236" y1="57" x2="276" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="400" y1="57" x2="440" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="564" y1="57" x2="592" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <rect x="16" y="126" width="290" height="40" rx="8" fill="#161d26" stroke="#58a6ff"/>
+        <text x="161" y="143" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">request MAP in</text>
+        <text x="161" y="159" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">:method :uri :headers :params :body-params</text>
+        <rect x="334" y="126" width="290" height="40" rx="8" fill="#161d26" stroke="#7ee787"/>
+        <text x="479" y="143" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">response MAP out</text>
+        <text x="479" y="159" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">:status :headers :body</text>
+        <text x="320" y="120" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">handler / middleware / adapter all speak plain maps</text>
+        <text x="320" y="196" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">the adapter is just one caller : tests and the REPL call the same handler with plain maps</text>
+      </svg>
+      <figcaption>Ring: handlers are maps-in/maps-out functions, so <em>every</em> layer is a function you can unit-test and call from the REPL without a socket.</figcaption>
+    </figure>
+
     <h2>The Ring model: HTTP as data</h2>
     <p>Ring defines three things: <strong>handlers</strong> (maps in, maps out),
     <strong>middleware</strong> (functions that decorate handlers) and <strong>adapters</strong>
@@ -277,6 +310,18 @@ ENTRYPOINT ["java", "-jar", "/app.jar"]</code></pre>
                  :body "{\"error\":\"no such route\"}"})})
 ;; default-handler bodies are strings/bytes - hence the raw JSON.</code></pre>
       </details>
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>The Ring model:</strong> handlers receive a request <em>map</em> and return a response <em>map</em> (<code>:status</code>, <code>:headers</code>, <code>:body</code>); middleware decorates handlers; adapters (Jetty/Undertow) glue to sockets.</li>
+        <li><strong>Plain-map testing:</strong> hand-build request maps in the REPL and call the handler directly &mdash; no server required.</li>
+        <li><strong>Reitit routing:</strong> route data as data (a vector of <code>[method path handler]</code>) with <code>:path-params</code>/<code>:body-params</code> destructured in-band.</li>
+        <li><strong>Malli validation:</strong> schemas on routes coerce and reject bad requests with details before your handler runs.</li>
+        <li><strong>Muuntaja:</strong> content negotiation turns JSON into <code>:body-params</code> and back via <code>wrap-json</code>-style middleware.</li>
+        <li><strong>Packaging:</strong> deploy like any JVM service &mdash; Luminus/Kit scaffolding as your Spring Initializr equivalent.</li>
+      </ul>
     </div>
 
     <section class="exam">

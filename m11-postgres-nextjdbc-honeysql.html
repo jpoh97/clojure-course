@@ -48,6 +48,41 @@
       </table>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Queries as data, safely to PostgreSQL</span></div>
+      <svg viewBox="0 0 640 200" role="img" aria-label="HoneySQL to PostgreSQL flow">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">CLOJURE DATA &rarr; PARAMETERIZED SQL &rarr; POOL &rarr; POSTGRES</text>
+        <rect x="16" y="40" width="128" height="58" rx="9" fill="#161d26" stroke="#58a6ff"/>
+        <text x="80" y="59" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">HoneySQL map</text>
+        <text x="80" y="79" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">{:select [:*] :from [:users]}</text>
+        <rect x="178" y="40" width="120" height="58" rx="9" fill="#161d26" stroke="#7ee787"/>
+        <text x="238" y="59" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">SQL string</text>
+        <text x="238" y="79" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">SELECT * FROM users</text>
+        <text x="238" y="92" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">(bound params, never concat)</text>
+        <rect x="332" y="40" width="120" height="58" rx="9" fill="#161d26" stroke="#e3b341"/>
+        <text x="392" y="59" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">next.jdbc</text>
+        <text x="392" y="79" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">rows as maps</text>
+        <rect x="486" y="40" width="64" height="58" rx="9" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="518" y="59" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="11">pool</text>
+        <text x="518" y="79" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">HikariCP</text>
+        <rect x="584" y="40" width="40" height="58" rx="9" fill="#161d26" stroke="#f8c040"/>
+        <text x="604" y="59" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">PG</text>
+        <text x="604" y="75" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="8">16</text>
+        <line x1="144" y1="69" x2="174" y2="69" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="298" y1="69" x2="328" y2="69" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="452" y1="69" x2="482" y2="69" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="550" y1="69" x2="580" y2="69" stroke="#9aa7b4" stroke-width="2"/>
+        <rect x="16" y="124" width="200" height="34" rx="8" fill="#161d26" stroke="#7ee787"/>
+        <text x="116" y="145" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">:USERS/ID qualified row keys</text>
+        <rect x="236" y="124" width="200" height="34" rx="8" fill="#161d26" stroke="#e3b341"/>
+        <text x="336" y="145" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">with-transaction = rollback on error</text>
+        <rect x="456" y="124" width="170" height="34" rx="8" fill="#161d26" stroke="#58a6ff"/>
+        <text x="541" y="145" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">Migratus = versioned schema</text>
+        <text x="320" y="184" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">conditional filters are just assoc/conj on the map &mdash; injection is impossible</text>
+      </svg>
+      <figcaption>Your Postgres skills transfer. HoneySQL builds queries as data; next.jdbc runs them on a HikariCP pool and returns plain maps; Migratus handles migrations.</figcaption>
+    </figure>
+
     <h2>Setup: database and dependencies</h2>
     <pre><code class="language-bash">docker run --name learn-pg -e POSTGRES_PASSWORD=secret \
   -e POSTGRES_DB=shop -p 5432:5432 -d postgres:16</code></pre>
@@ -252,6 +287,18 @@ create table users (
       <span class="tnum">Task 5</span><strong>First migration.</strong> Create migration 0002 adding a
       <code>tags text[]</code> column to products (down drops it), then run Migratus twice and observe the second
       run is a no-op.
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>Your stack translates:</strong> JPA/Hibernate &rarr; plain maps (or records); jOOQ/Exposed &rarr; HoneySQL; MyBatis &rarr; HugSQL; Flyway &rarr; Migratus/Ragtime; HikariCP is HikariCP.</li>
+        <li><strong>Connect without ORM magic:</strong> next.jdbc reads a spec map, builds a datasource, runs parameterized SQL (<code>execute!</code>), rows come back as plain maps.</li>
+        <li><strong>Row-key qualification:</strong> <code>:USERS/ID</code> avoids collisions across joins; opt out with result-set builder fns when unqualified keys suit.</li>
+        <li><strong>HoneySQL builds SQL as data:</strong> conditional filters are just <code>assoc</code>/<code>conj</code> on a map; formatting always emits bound parameters &mdash; injection is impossible.</li>
+        <li><strong>Transactions:</strong> <code>jdbc/with-transaction</code> rolls back the whole transaction on an exception and commits on normal completion.</li>
+        <li><strong>Migrations:</strong> Migratus/Ragtime apply versioned scripts and record them &mdash; the same job Flyway does.</li>
+      </ul>
     </div>
 
     <section class="exam">

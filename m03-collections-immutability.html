@@ -36,6 +36,38 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Four core collections &amp; structural sharing</span></div>
+      <svg viewBox="0 0 640 230" role="img" aria-label="Collections and structural sharing">
+        <text x="0" y="18" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">THE FOUR CORE COLLECTIONS</text>
+        <rect x="25" y="42" width="120" height="44" rx="9" fill="#161d26" stroke="#58a6ff"/>
+        <text x="85" y="60" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13">[1 2 3]</text>
+        <text x="85" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">vector</text>
+        <rect x="187" y="42" width="120" height="44" rx="6" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="247" y="60" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="13">&rsquo;(1 2 3)</text>
+        <text x="247" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">list</text>
+        <rect x="349" y="42" width="120" height="44" rx="6" fill="#161d26" stroke="#e3b341"/>
+        <text x="409" y="60" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="13">{:a 1}</text>
+        <text x="409" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">map</text>
+        <rect x="511" y="42" width="104" height="44" rx="6" fill="#161d26" stroke="#63b132"/>
+        <text x="563" y="60" text-anchor="middle" fill="#63b132" font-family="monospace" font-size="13">#{1 2}</text>
+        <text x="563" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">set</text>
+        <text x="0" y="126" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">STRUCTURAL SHARING : &ldquo;copies&rdquo; share nodes, so they&rsquo;re cheap</text>
+        <circle cx="60" cy="158" r="8" fill="#58a6ff"/>
+        <text x="60" y="163" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="10" font-weight="700">v1</text>
+        <circle cx="205" cy="158" r="8" fill="#58a6ff"/>
+        <text x="205" y="163" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="10" font-weight="700">v2</text>
+        <circle cx="350" cy="158" r="8" fill="#58a6ff"/>
+        <text x="350" y="163" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="10" font-weight="700">v3</text>
+        <text x="500" y="168" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="13" font-weight="700">conj</text>
+        <circle cx="590" cy="158" r="8" fill="#63b132"/>
+        <text x="590" y="163" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="10" font-weight="700">n</text>
+        <line x1="60" y1="158" x2="590" y2="158" stroke="#29323d" stroke-width="2"/>
+        <text x="320" y="204" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">new versions reuse a shared spine + a few new nodes ; the old version stays untouched</text>
+      </svg>
+      <figcaption>Vectors, lists, maps and sets all have literals. Updates return <em>new</em> values that share unchanged structure &mdash; safe to pass anywhere, on any thread.</figcaption>
+    </figure>
+
     <h2>The four core collections</h2>
     <pre><code class="language-clojure">[1 2 3]            ; vector - indexed, ordered. THE default collection
 '(1 2 3)           ; list   - linked, ordered. Mostly for code/forms
@@ -205,6 +237,17 @@ langs                ;=&gt; ["clojure" "kotlin" "java"]          original intact
 ;"Elapsed time: ~0.05 msecs"
 [(count big) (count big2)]   ;=&gt; [1000000 1000001]</code></pre>
       </details>
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>Four core types &amp; literals:</strong> vector <code>[1 2 3]</code>, list <code>&rsquo;(1 2 3)</code>, map <code>{:a 1}</code>, set <code>#{1 2}</code> &mdash; the default <em>is</em> the literal.</li>
+        <li><strong>Essential ops:</strong> <code>conj</code>, <code>assoc</code>, <code>dissoc</code>, <code>get</code>/<code>nth</code>, <code>keys</code>/<code>vals</code>, <code>contains?</code>, <code>count</code>, <code>seq</code>.</li>
+        <li><strong>Immutability is practical:</strong> persistent structures use structural sharing &mdash; new versions are cheap and readers of the old one see an unchanged world.</li>
+        <li><strong>Value equality:</strong> maps/collections compare by content, so they work as keys and make tests read like truth tables.</li>
+        <li><strong>Everything is invokable:</strong> keywords/maps/sets/vectors act as functions (lookup, membership, lookup-by-index).</li>
+      </ul>
     </div>
 
     <section class="exam">

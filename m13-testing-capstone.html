@@ -36,6 +36,29 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Tests are the safety net for a dynamic language</span></div>
+      <svg viewBox="0 0 640 206" role="img" aria-label="Testing pyramid in Clojure">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">THE TEST PYRAMID : A SAFETY NET FOR FEARLESS REFACTORING</text>
+        <polygon points="320,38 500,170 140,170" fill="#10151c" stroke="#63b132" stroke-width="2"/>
+        <line x1="235" y1="126" x2="405" y2="126" stroke="#29323d" stroke-width="1"/>
+        <line x1="280" y1="78" x2="360" y2="78" stroke="#29323d" stroke-width="1"/>
+        <text x="320" y="96" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="13" font-weight="700">integration</text>
+        <text x="320" y="112" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">HTTP + DB (mock/request)</text>
+        <text x="320" y="146" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="14" font-weight="700">unit</text>
+        <text x="320" y="162" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">deftest / is / are</text>
+        <text x="320" y="58" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="13" font-weight="700">property</text>
+        <text x="320" y="72" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">test.check invariants + shrink</text>
+        <rect x="14" y="178" width="196" height="22" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="112" y="194" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">fixtures :each / :once (like @BeforeEach/@BeforeAll)</text>
+        <rect x="228" y="178" width="196" height="22" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="326" y="194" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">clj-kondo linter + cljfmt formatter + CI</text>
+        <rect x="442" y="178" width="184" height="22" rx="6" fill="#161d26" stroke="#29323d"/>
+        <text x="534" y="194" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">capstone : LinkVault full-stack</text>
+      </svg>
+      <figcaption>Because functions are values and state is explicit, there is rarely anything to mock &mdash; you assert map-in/map-out behavior at every layer of the pyramid.</figcaption>
+    </figure>
+
     <h2>clojure.test essentials</h2>
     <pre><code class="language-clojure">(ns shop.domain-test
   (:require [clojure.test :refer [deftest is testing are]]
@@ -216,6 +239,18 @@ jobs:
       <span class="tnum">Task 5</span><strong>Ship it.</strong> Complete LinkVault, write a README with curl
       examples, and deploy the jar somewhere (Fly.io/Railway have free tiers). Congratulations &mdash;
       you're a Clojure developer now.
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>clojure.test:</strong> <code>deftest</code>/<code>is</code>/<code>testing</code>/<code>are</code> plus <code>thrown?</code>; functions are values, so inputs and expected outputs are just maps.</li>
+        <li><strong>Fixtures:</strong> <code>use-fixtures</code> with <code>:each</code> (like <code>@BeforeEach</code>) and <code>:once</code> (like <code>@BeforeAll</code>) wrap setup/teardown.</li>
+        <li><strong>HTTP tests without Spring:</strong> <code>ring.mock.request</code> builds request maps; a Ring handler is testable directly, no server started &mdash; the payoff of Module 10.</li>
+        <li><strong>Property-based testing:</strong> test.check generates random cases against invariants and <em>shrinks</em> failures to minimal examples (jqwik/Kotest props, natively).</li>
+        <li><strong>Lint &amp; format:</strong> clj-kondo (de-facto linter), cljfmt/zprint (formatter) and a CI pipeline keep refactors fearless.</li>
+        <li><strong>Capstone:</strong> LinkVault &mdash; a full-stack app stitching REPL, collections, threading, state, interop, Ring + Reitit + Malli, next.jdbc + HoneySQL, and ClojureScript + Reagent together.</li>
+      </ul>
     </div>
 
     <section class="exam">

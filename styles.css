@@ -295,6 +295,35 @@ pre {
 .box.warn .box-title { color: var(--red); }
 .box.tip      { border-left-color: var(--accent); background: var(--green-soft); }
 .box.tip .box-title { color: var(--accent); }
+.box.recap    { border-left-color: var(--purple); background: rgba(210,168,255,.06); }
+.box.recap .box-title { color: var(--purple); }
+.box.recap ul { margin: 6px 0 0; padding-left: 18px; }
+.box.recap li { margin: 4px 0; }
+.box.recap code { color: #c9b3e8; }
+
+/* ============ Figures (visual overviews) ============ */
+.figure {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 14px 18px 12px;
+  margin: 22px 0;
+}
+.figure .fig-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 2px; }
+.figure .fig-chip {
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent2);
+  background: var(--accent2-soft);
+  border: 1px solid rgba(88, 166, 255, .35);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.figure .fig-title { font-size: .95rem; font-weight: 700; color: var(--text); }
+.figure svg { width: 100%; height: auto; display: block; margin: 8px 0 2px; }
+.figure figcaption { font-size: .82rem; color: var(--muted); margin-top: 4px; }
 
 /* ============ Tables ============ */
 table {

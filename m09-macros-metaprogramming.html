@@ -36,6 +36,40 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Code is data — macros rewrite forms before evaluation</span></div>
+      <svg viewBox="0 0 640 212" role="img" aria-label="Macro expansion pipeline">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">READER &rarr; MACROEXPAND &rarr; COMPILE &rarr; EVALUATE</text>
+        <rect x="16" y="38" width="120" height="52" rx="9" fill="#161d26" stroke="#58a6ff"/>
+        <text x="76" y="57" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">your form</text>
+        <text x="76" y="76" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="10">(unless ok ...)</text>
+        <rect x="180" y="38" width="120" height="52" rx="9" fill="#161d26" stroke="#e3b341"/>
+        <text x="240" y="57" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">macro (fn)</text>
+        <text x="240" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">rewrites at compile time</text>
+        <rect x="344" y="38" width="120" height="52" rx="9" fill="#161d26" stroke="#7ee787"/>
+        <text x="404" y="57" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">expanded form</text>
+        <text x="404" y="76" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="10">(when-not ok ...)</text>
+        <rect x="508" y="38" width="116" height="52" rx="9" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="566" y="57" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="11">evaluate</text>
+        <text x="566" y="76" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">result :done</text>
+        <line x1="136" y1="64" x2="176" y2="64" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="300" y1="64" x2="340" y2="64" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="464" y1="64" x2="504" y2="64" stroke="#9aa7b4" stroke-width="2"/>
+        <text x="320" y="122" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">(macroexpand-1 &rsquo;...) shows the exact expansion step</text>
+        <text x="20" y="150" fill="#58a6ff" font-family="monospace" font-size="12" font-weight="700">TEMPLATE TOOLKIT</text>
+        <rect x="20" y="158" width="132" height="30" rx="7" fill="#161d26" stroke="#58a6ff"/>
+        <text x="86" y="178" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">` syntax-quote</text>
+        <rect x="166" y="158" width="132" height="30" rx="7" fill="#161d26" stroke="#7ee787"/>
+        <text x="232" y="178" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">~ unquote</text>
+        <rect x="312" y="158" width="132" height="30" rx="7" fill="#161d26" stroke="#e3b341"/>
+        <text x="378" y="178" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">~@ splice</text>
+        <rect x="458" y="158" width="132" height="30" rx="7" fill="#161d26" stroke="#f85149"/>
+        <text x="524" y="178" text-anchor="middle" fill="#f85149" font-family="monospace" font-size="11">x# auto-gensym</text>
+        <text x="320" y="206" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">rule of thumb : write a function first &mdash; reach for macros only for unevaluated forms / control flow</text>
+      </svg>
+      <figcaption>A macro is a function that runs at compile time and returns a form to compile in its place. Save evaluation is just another function over data (<code>eval</code>).</figcaption>
+    </figure>
+
     <h2>Code is data</h2>
     <p>The same structures you learned in Module 03 represent source code. Quoting turns off evaluation:</p>
     <pre><code class="language-clojure">(+ 1 2)          ;=&gt; 3            evaluate: a call
@@ -182,6 +216,17 @@
       <span class="tnum">Task 5</span><strong>Explore built-ins.</strong> Run <code>(macroexpand-1)</code> on
       <code>'(when true 1)</code>, <code>'(-&gt; m (assoc :k 1))</code> and <code>'(.. s trim)</code>; explain in one
       sentence what each expanded to.
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>Code is data:</strong> quoting (<code>&rsquo;(+ 1 2)</code>) yields a list; <code>eval</code> makes evaluation just a function over that data.</li>
+        <li><strong>The pipeline:</strong> reader &rarr; macroexpansion &rarr; compile &rarr; evaluate; a macro receives forms <em>unevaluated</em> and returns a replacement form.</li>
+        <li><strong>Template toolkit:</strong> <code>`</code> syntax-quote (auto-qualifies), <code>~</code> unquote, <code>~@</code> unquote-splicing, <code>x#</code> auto-gensym for hygiene.</li>
+        <li><strong>Debugging:</strong> <code>macroexpand-1</code>/<code>macroexpand-all</code>, and the canonical &ldquo;multiple evaluation&rdquo; bug that fresh macros fall into.</li>
+        <li><strong>Judgment:</strong> write a function first; reach for a macro only when you need unevaluated forms, custom control flow, or compile-time transformation (as <code>-&gt;</code>/<code>deftest</code> themselves do).</li>
+      </ul>
     </div>
 
     <section class="exam">

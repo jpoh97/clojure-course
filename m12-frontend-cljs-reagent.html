@@ -54,6 +54,47 @@ npm install --save-dev shadow-cljs
 npx shadow-cljs watch app        # develop
 npx shadow-cljs release app      # production bundle (advanced DCE)</code></pre>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">React ideas, expressed as data & events</span></div>
+      <svg viewBox="0 0 640 216" role="img" aria-label="Reagent and re-frame flow">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">REAGENT : HICCUP VECTORS &rarr; DOM</text>
+        <rect x="16" y="34" width="140" height="46" rx="9" fill="#161d26" stroke="#58a6ff"/>
+        <text x="86" y="51" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">hiccup data</text>
+        <text x="86" y="70" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">[:div.card &quot;hi&quot;]</text>
+        <rect x="196" y="34" width="120" height="46" rx="9" fill="#161d26" stroke="#7ee787"/>
+        <text x="256" y="51" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">Reagent</text>
+        <text x="256" y="70" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">(React under the hood)</text>
+        <rect x="356" y="34" width="130" height="46" rx="9" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="421" y="51" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="11">DOM</text>
+        <text x="421" y="70" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">virtual + real</text>
+        <rect x="526" y="34" width="98" height="46" rx="9" fill="#161d26" stroke="#e3b341"/>
+        <text x="575" y="51" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">r/atom</text>
+        <text x="575" y="70" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">local state</text>
+        <line x1="156" y1="57" x2="192" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="316" y1="57" x2="352" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="486" y1="57" x2="522" y2="57" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="575" y1="80" x2="575" y2="96" stroke="#e3b341" stroke-width="2" stroke-dasharray="4 3"/>
+        <text x="575" y="110" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">deref = subscribe to re-render</text>
+        <text x="0" y="136" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">RE-FRAME : ONE WAY DATA + EVENTS</text>
+        <rect x="16" y="146" width="116" height="40" rx="8" fill="#161d26" stroke="#58a6ff"/>
+        <text x="74" y="164" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">event</text>
+        <rect x="150" y="146" width="116" height="40" rx="8" fill="#161d26" stroke="#7ee787"/>
+        <text x="208" y="164" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="11">handler (pure)</text>
+        <rect x="284" y="146" width="116" height="40" rx="8" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="342" y="164" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="11">app-db (atom)</text>
+        <rect x="418" y="146" width="116" height="40" rx="8" fill="#161d26" stroke="#e3b341"/>
+        <text x="476" y="164" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="11">subscription</text>
+        <rect x="552" y="146" width="72" height="40" rx="8" fill="#161d26" stroke="#58a6ff"/>
+        <text x="588" y="164" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="11">view</text>
+        <line x1="132" y1="166" x2="146" y2="166" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="266" y1="166" x2="280" y2="166" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="400" y1="166" x2="414" y2="166" stroke="#9aa7b4" stroke-width="2"/>
+        <line x1="534" y1="166" x2="548" y2="166" stroke="#9aa7b4" stroke-width="2"/>
+        <text x="320" y="206" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">like React hooks &amp; Redux, but the wiring is just atoms and data</text>
+      </svg>
+      <figcaption>Reagent components return hiccup data that React renders; local state is an <code>r/atom</code>. re-frame layers unidirectional events &rarr; handlers &rarr; app-db &rarr; subscriptions &rarr; views.</figcaption>
+    </figure>
+
     <h2>Hiccup: JSX without JSX</h2>
     <p>Components are functions returning vectors: tag keyword, optional attrs map, children.</p>
     <pre><code class="language-clojure">[:div.card "Hello"]                        ;=&lt; div class="card"&gt;
@@ -238,6 +279,18 @@ npx shadow-cljs release app      # production bundle (advanced DCE)</code></pre>
       <span class="tnum">Task 5</span><strong>re-frame counter.</strong> Convert the counter to
       <code>::inc</code> event + <code>::count</code> subscription; add a second button dispatching
       <code>[::inc -1]</code>.
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>ClojureScript toolchain:</strong> shadow-cljs + npm with hot reload, dev server (<code>:dev-http</code>) and production builds via <code>npx shadow-cljs release</code>.</li>
+        <li><strong>Hiccup instead of JSX:</strong> a component is a function returning a vector &mdash; tag keyword, optional attrs map, children; fragments and id/class sugar included.</li>
+        <li><strong>Reagent component kinds:</strong> form-1 (pure props &rarr; markup), form-2 (returns a render fn, like <code>useState</code> local state with <code>r/atom</code>), and controlled inputs with ratoms.</li>
+        <li><strong>Every React hook mapped:</strong> <code>useState</code> &rarr; form-2 + ratom; <code>useEffect</code> &rarr; <code>:component-did-mount</code>/lifecycle fns; <code>useContext</code> &rarr; Reagent context provider.</li>
+        <li><strong>List keys:</strong> <code>^{:key id}</code> metadata is exactly React&rsquo;s <code>key</code> prop.</li>
+        <li><strong>re-frame at scale:</strong> <code>dispatch</code> an event vector &rarr; pure handler updates <code>app-db</code> &rarr; memoized subscriptions notify views &mdash; Redux-style one-way flow, effects as data.</li>
+      </ul>
     </div>
 
     <section class="exam">

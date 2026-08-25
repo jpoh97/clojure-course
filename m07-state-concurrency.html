@@ -36,6 +36,42 @@
       </ul>
     </div>
 
+    <figure class="figure">
+      <div class="fig-head"><span class="fig-chip">Visual overview</span><span class="fig-title">Identity points through successive immutable values</span></div>
+      <svg viewBox="0 0 640 218" role="img" aria-label="Identity over time and reference types">
+        <text x="0" y="16" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">IDENTITY &harr; VALUES  &middot;  PICK THE RIGHT REFERENCE TYPE</text>
+        <rect x="20" y="40" width="150" height="50" rx="10" fill="#161d26" stroke="#58a6ff"/>
+        <text x="95" y="60" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="700">atom</text>
+        <text x="95" y="78" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="10">the identity (named cell)</text>
+        <line x1="170" y1="65" x2="230" y2="65" stroke="#9aa7b4" stroke-width="2"/>
+        <text x="200" y="58" text-anchor="middle" fill="#7ee787" font-family="monospace" font-size="10">swap!</text>
+        <circle cx="290" cy="65" r="7" fill="#d2a8ff"/>
+        <text x="290" y="69" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="8">v1</text>
+        <circle cx="360" cy="65" r="7" fill="#d2a8ff"/>
+        <text x="360" y="69" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="8">v2</text>
+        <circle cx="430" cy="65" r="7" fill="#d2a8ff"/>
+        <text x="430" y="69" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="8">v3</text>
+        <circle cx="500" cy="65" r="7" fill="#63b132"/>
+        <text x="500" y="69" text-anchor="middle" fill="#0d1117" font-family="monospace" font-size="8">v4</text>
+        <text x="430" y="105" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="11">each snapshot is an immutable VALUE (Module 03); only the identity changes over time</text>
+        <text x="20" y="140" fill="#63b132" font-family="monospace" font-size="12" font-weight="700">CHOOSING A REFERENCE TYPE</text>
+        <rect x="20" y="150" width="116" height="42" rx="8" fill="#161d26" stroke="#58a6ff"/>
+        <text x="78" y="168" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="12">atom</text>
+        <text x="78" y="183" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">sync CAS</text>
+        <rect x="146" y="150" width="116" height="42" rx="8" fill="#161d26" stroke="#e3b341"/>
+        <text x="204" y="168" text-anchor="middle" fill="#e3b341" font-family="monospace" font-size="12">ref + STM</text>
+        <text x="204" y="183" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">coordinated tx</text>
+        <rect x="272" y="150" width="116" height="42" rx="8" fill="#161d26" stroke="#d2a8ff"/>
+        <text x="330" y="168" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="12">agent</text>
+        <text x="330" y="183" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">async serial</text>
+        <rect x="398" y="150" width="116" height="42" rx="8" fill="#161d26" stroke="#63b132"/>
+        <text x="456" y="168" text-anchor="middle" fill="#63b132" font-family="monospace" font-size="12">core.async</text>
+        <text x="456" y="183" text-anchor="middle" fill="#9aa7b4" font-family="monospace" font-size="9">channels &lt;/&gt;!</text>
+        <text x="556" y="176" fill="#9aa7b4" font-family="monospace" font-size="10">+ future / promise</text>
+      </svg>
+      <figcaption>Values never change; an identity is just a cell that points to the current value. All reference types also expose <code>ref</code>/<code>agent</code>/<code>channel</code> variants for coordination.</figcaption>
+    </figure>
+
     <h2>The mental model that changes everything</h2>
     <p>In Java, an object's fields change in place while other threads may be reading them &mdash; hence locks,
     volatile, concurrent collections. Clojure separates the two concerns:</p>
@@ -232,6 +268,18 @@
 (Thread/sleep 500)         ; let go blocks drain (demo only)
 (a/close! ch)</code></pre>
       </details>
+    </div>
+
+    <div class="box recap">
+      <div class="box-title">Summary &middot; what you covered</div>
+      <ul>
+        <li><strong>Identity vs value:</strong> a reference cell points through successive immutable values; nothing you &ldquo;update&rdquo; ever mutates in place.</li>
+        <li><strong>Atoms:</strong> <code>swap!</code>/<code>reset!</code> for synchronous CAS updates &mdash; functions passed to <code>swap!</code> must be pure because it retries under contention.</li>
+        <li><strong>Refs + STM:</strong> <code>dosync</code> gives atomic transactions across many refs, with automatic retry on conflict.</li>
+        <li><strong>Agents:</strong> <code>send</code>/<code>send-off</code> apply updates asynchronously, one at a time, per agent &mdash; great for serialized background writes.</li>
+        <li><strong>Observability:</strong> <code>add-watch</code>/<code>remove-watch</code>, <code>:validator</code> on atoms, and <code>core.async</code> channels with parking <code>&gt;!</code>/<code>&lt;!</code> vs blocking <code>&gt;!!</code>/<code>&lt;!!</code>.</li>
+        <li><strong>Latches of truth:</strong> <code>future</code>/<code>promise</code>/<code>pmap</code> for easy parallelism without shared mutable state.</li>
+      </ul>
     </div>
 
     <section class="exam">
