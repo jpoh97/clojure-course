@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 11 · PostgreSQL: next.jdbc + HoneySQL — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m11">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 3 &middot; Real Applications &rsaquo; <b>Module 11</b></nav>
+    <h1>PostgreSQL: next.jdbc + HoneySQL</h1>
+    <p class="subtitle">Your Postgres experience transfers completely. Clojure skips ORM magic and treats SQL &mdash; and the queries themselves &mdash; as data.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Connect to Postgres with pooling (yes, HikariCP again).</li>
+        <li>Run parameterized queries, inserts and transactions safely.</li>
+        <li>Build dynamic queries as data structures with HoneySQL.</li>
+        <li>Manage schema changes with migrations.</li>
+      </ul>
+    </div>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from the Java persistence stack</div>
+      <table>
+        <tr><th>You know</th><th>Clojure equivalent</th><th>Vibe</th></tr>
+        <tr><td>JPA / Hibernate entities</td><td>plain maps (or records)</td><td>No session cache, no lazy-loading surprises &mdash; rows are just data.</td></tr>
+        <tr><td>jOOQ / Kotlin Exposed / Querydsl</td><td>HoneySQL</td><td>Queries as data structures, compiled to safe parameterized SQL.</td></tr>
+        <tr><td>MyBatis XML mappers</td><td>HugSQL</td><td>Hand-written SQL in files, functions generated from it.</td></tr>
+        <tr><td>Flyway / Liquibase</td><td>Migratus / Ragtime</td><td>Versioned migration scripts.</td></tr>
+        <tr><td>HikariCP</td><td>HikariCP itself</td><td>Same pool Spring Boot ships.</td></tr>
+      </table>
+    </div>
+
+    <h2>Setup: database and dependencies</h2>
+    <pre><code class="language-bash">docker run --name learn-pg -e POSTGRES_PASSWORD=secret \
+  -e POSTGRES_DB=shop -p 5432:5432 -d postgres:16</code></pre>
+    <pre><code class="language-clojure">;; deps.edn additions
+{com.github.seancorfield/next.jdbc {:mvn/version "1.3.1002"}
+ com.github.seancorfield/honeysql  {:mvn/version "2.6.1210"}
+ hikari-cp/hikari-cp               {:mvn/version "3.2.0"}
+ migratus/migratus                 {:mvn/version "1.6.4"}}}</code></pre>
+
+    <h2>Datasources and your first queries</h2>
+    <pre><code class="language-clojure">(ns shop.db
+  (:require [next.jdbc :as jdbc]
+            [next.jdbc.result-set :as rs]))
+
+;; simple spec map - next.jdbc builds an embedded datasource:
+(def ds (jdbc/get-datasource
+          {:dbtype "postgresql" :host "localhost" :port 5432
+           :dbname "shop" :username "postgres" :password "secret"}))
+
+(jdbc/execute! ds ["select * from users"])
+;=&gt; [{:USERS/ID 1, :USERS/EMAIL "ada@x.io"}]
+;;   ^ table-qualified keywords by default (schema-aware!)
+
+;; usually you want plain keys:
+(jdbc/execute-one! ds
+  ["select id, email from users where id = ?" 1]
+  {:builder-fn rs/as-unqualified-maps})
+;=&gt; {:id 1, :email "ada@x.io"}</code></pre>
+    <ul>
+      <li><code>?</code> placeholders are always parameterized &mdash; string concatenation of SQL is a code smell here just like anywhere.</li>
+      <li><code>execute!</code> returns a vector of row maps (even for one row); <code>execute-one!</code> returns a single map or nil.</li>
+    </ul>
+
+    <h2>The production pool: HikariCP</h2>
+    <pre><code class="language-clojure">(require '[hikari-cp.core :as hk])
+
+(def ds (hk/make-datasource
+          {:jdbc-url          "jdbc:postgresql://localhost:5432/shop"
+           :username          "postgres"
+           :password          "secret"
+           :maximum-pool-size 10}))
+
+(hk/close-datasource ds)   ; at shutdown</code></pre>
+
+    <h2>Writes, RETURNING and transactions</h2>
+    <pre><code class="language-clojure">;; insert and read back generated columns:
+(jdbc/execute-one! ds
+  ["insert into users (email) values (?) returning id, email" "ada@x.io"]
+  {:builder-fn rs/as-unqualified-maps})
+;=&gt; {:id 42, :email "ada@x.io"}
+
+;; transactions - throw inside and everything rolls back:
+(jdbc/with-transaction [tx ds {:isolation "repeatable-read"}]
+  (jdbc/execute-one! tx ["update accounts set balance = balance - 50 where id = ?" 1])
+  (jdbc/execute-one! tx ["update accounts set balance = balance + 50 where id = ?" 2]))</code></pre>
+
+    <h2>HoneySQL: queries as data</h2>
+    <pre><code class="language-clojure">(require '[honey.sql :as sql])
+
+(sql/format {:select   [:id :email]
+             :from     [:users]
+             :where    [:and [:= :status "active"] [:&gt; :age 18]]
+             :order-by [[:created-at :desc]]
+             :limit    20})
+;=&gt; [["select id, email from users where status = ? and age &gt; ? order by created_at desc limit 20"
+;     "active" 18]]
+
+;; writes are data too:
+(sql/format {:insert-into :products
+             :values      [{:name "Widget" :price 9.99}]})
+(sql/format {:update :products :set {:price 12.50} :where [:= :id 7]})
+(sql/format {:delete-from :sessions :where [:&lt; :expires-at [:now]]})</code></pre>
+    <p>The killer feature is <strong>composability</strong>: filters accumulate like any other data structure
+    (Modules 03 and 05), so dynamic search endpoints stop being string-concatenation minefields:</p>
+    <pre><code class="language-clojure">(defn search-users [{:keys [email-like active? limit]}]
+  (let [filters (cond-&gt; []
+                  email-like (conj [:like :email (str "%" email-like "%")])
+                  active?    (conj [:= :active true]))]
+    (-&gt; {:select [:*] :from [:users]}
+        (assoc :where (if (seq filters) (into [:and] filters) true))
+        (assoc :limit (or limit 50))
+        (as-&gt; q (jdbc/execute! ds (sql/format q)
+                                {:builder-fn rs/as-unqualified-maps})))))</code></pre>
+    <div class="box tip">
+      <div class="box-title">SQL-first alternative</div>
+      <p>If you prefer writing raw SQL in files (MyBatis style), look at <strong>HugSQL</strong>: annotated
+      <code>-- :name find-by-email</code> comments become real functions at compile time. Many teams mix both:
+      HoneySQL for dynamic parts, hand-written SQL for complex reporting.</p>
+    </div>
+
+    <h2>Migrations with Migratus</h2>
+    <pre><code class="language-text">resources/
+  migrations/
+    0001-create-users.up.sql
+    0001-create-users.down.sql</code></pre>
+    <pre><code class="language-sql">-- 0001-create-users.up.sql
+create table users (
+  id         bigserial primary key,
+  email      text unique not null,
+  created_at timestamptz not null default now()
+);</code></pre>
+    <pre><code class="language-clojure">(def migratus-cfg
+  {:store :database
+   :migration-dir "migrations/"
+   :db {:dbtype "postgresql" :dbname "shop"
+        :host "localhost" :user "postgres" :password "secret"}})
+
+(require '[migratus.core :as mig])
+(mig/migrate migratus-cfg)      ; applies pending migrations, tracks them in DB</code></pre>
+
+    <h2>Fitting into the app (Module 10)</h2>
+    <pre><code class="language-clojure">;; shop/db/users.clj - repository functions take ds explicitly:
+(defn find-by-email [ds email]
+  (jdbc/execute-one! ds ["select * from users where email = ?" email]
+                     {:builder-fn rs/as-unqualified-maps}))
+
+;; handlers receive ds via closure/partial - DI without annotations:
+(defn make-handler [ds]
+  (ring/router
+    [["/api/users/by-email/:email"
+      {:get (fn [req]
+              (if-some [u (find-by-email ds (get-in req [:path-params :email]))]
+                {:status 200 :body u}
+                {:status 404 :body {:error "nope"}}))}]]))
+
+;; JSONB roundtrip:
+(jdbc/execute-one! ds ["insert into events (payload) values (?::jsonb)"
+                        (json/generate-string {:kind "signup"})])
+(jdbc/execute-one! ds ["select payload-&gt;&gt;'kind' as kind from events limit 1"])</code></pre>
+    <div class="box warn">
+      <div class="box-title">No Hibernate &mdash; on purpose</div>
+      <p>Clojure culture prefers explicit SQL over object-relational mapping: what runs is what you wrote,
+      performance tuning is ordinary Postgres work, and there is no lazy-load/session state to debug.
+      The tradeoff is manual result-to-map plumbing (thin, thanks to builders) and no change-tracking &mdash;
+      updates are explicit statements.</p>
+    </div>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p><strong>Metabase</strong>, the open-source BI tool, is a giant Clojure application whose core is exactly
+      this: next.jdbc-style connections to dozens of databases, queries composed as data. Nubank pairs Clojure
+      services with Postgres/Datomic for ledger-scale correctness.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Connect and explore.</strong> Start the Docker container, define
+      <code>ds</code>, and list all tables by querying <code>information_schema.tables</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(jdbc/execute! ds
+  ["select table_name from information_schema.tables where table_schema = 'public'"])</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Products repository.</strong> Write <code>create!</code>,
+      <code>find-all</code>, <code>find-by-id</code>, <code>delete!</code> for a products table using unqualified
+      map results and RETURNING on insert.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn create! [ds p]
+  (jdbc/execute-one! ds
+    ["insert into products (name, price) values (?, ?) returning id, name, price"
+     (:name p) (:price p)]
+    {:builder-fn rs/as-unqualified-maps}))
+
+(defn find-all [ds]
+  (jdbc/execute! ds ["select * from products order by id"]
+                 {:builder-fn rs/as-unqualified-maps}))
+
+(defn delete! [ds id]
+  (jdbc/execute-one! ds ["delete from products where id = ?" id]))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Dynamic filter.</strong> Extend Task 2 with
+      <code>(search ds {:max-price 20 :name-like "wid"})</code> built with HoneySQL + <code>cond-&gt;</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn search [ds {:keys [max-price name-like]}]
+  (let [f (cond-&gt; []
+            max-price (conj [:&lt;= :price max-price])
+            name-like (conj [:like :name (str "%" name-like "%")]))]
+    (jdbc/execute! ds
+      (sql/format (-&gt; {:select [:*] :from [:products]}
+                      (assoc :where (if (seq f) (into [:and] f) true))))
+      {:builder-fn rs/as-unqualified-maps})))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Guarded stock transfer.</strong> In a transaction, move quantity
+      from product A to B only if A has stock &mdash; otherwise roll back everything.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn move-stock! [ds from-id to-id qty]
+  (jdbc/with-transaction [tx ds]
+    (let [{:keys [stock]} (jdbc/execute-one! tx
+                            ["select stock from products where id = ? for update" from-id])]
+      (when (&lt; stock qty)
+        (throw (ex-info "insufficient stock" {:qty qty})))
+      (jdbc/execute-one! tx ["update products set stock = stock - ? where id = ?" qty from-id])
+      (jdbc/execute-one! tx ["update products set stock = stock + ? where id = ?" qty to-id]))))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>First migration.</strong> Create migration 0002 adding a
+      <code>tags text[]</code> column to products (down drops it), then run Migratus twice and observe the second
+      run is a no-op.
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 11</h2>
+      <form class="quiz" data-quiz="m11">
+        <fieldset class="q" data-answer="b">
+          <legend>1 &middot; What does <code>(jdbc/execute! ds ["select ... where id = ?" 42])</code> give you?</legend>
+          <label><input type="radio" name="m11q1" value="a"><span>A lazy stream you must close manually</span></label>
+          <label><input type="radio" name="m11q1" value="b"><span>A vector of row maps, with 42 sent as a bound parameter</span></label>
+          <label><input type="radio" name="m11q1" value="c"><span>A raw java.sql.ResultSet</span></label>
+          <div class="explain" hidden>Results materialize as immutable maps; parameters are always bound server-side, neutralizing injection.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>2 &middot; Why does <code>:USERS/ID</code> appear instead of <code>:ID</code>?</legend>
+          <label><input type="radio" name="m11q2" value="a"><span>A bug in next.jdbc</span></label>
+          <label><input type="radio" name="m11q2" value="b"><span>Postgres lowercases everything</span></label>
+          <label><input type="radio" name="m11q2" value="c"><span>next.jdbc qualifies column keys by table by default; pass a result-set builder-fn to change it</span></label>
+          <div class="explain" hidden>Qualified keys prevent collisions across joins (two tables both having :id); as-unqualified-apache/as-unqualified-maps opt out when you don't need it.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>3 &middot; What is the main advantage of building queries with HoneySQL?</legend>
+          <label><input type="radio" name="m11q3" value="a"><span>Conditional fragments compose as data, always emitted with bound parameters</span></label>
+          <label><input type="radio" name="m11q3" value="b"><span>It caches query plans better than raw strings</span></label>
+          <label><input type="radio" name="m11q3" value="c"><span>It replaces the need for indexes</span></label>
+          <div class="explain" hidden>Dynamic filtering/search becomes assoc/conj on a map instead of fragile string concatenation, and formatting guarantees parameterization.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>4 &middot; Throwing an exception inside <code>jdbc/with-transaction</code>&hellip;</legend>
+          <label><input type="radio" name="m11q4" value="a"><span>is swallowed after logging</span></label>
+          <label><input type="radio" name="m11q4" value="b"><span>commits partial work anyway</span></label>
+          <label><input type="radio" name="m11q4" value="c"><span>only closes the connection</span></label>
+          <label><input type="radio" name="m11q4" value="d"><span>rolls the whole transaction back automatically</span></label>
+          <div class="explain" hidden>The macro wraps the body in try/catch: exception =&gt; rollback + rethrow; normal completion =&gt; commit.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>5 &middot; Which pairing matches Flyway's role in Spring projects?</legend>
+          <label><input type="radio" name="m11q5" value="a"><span>HugSQL</span></label>
+          <label><input type="radio" name="m11q5" value="b"><span>Migratus (or Ragtime)</span></label>
+          <label><input type="radio" name="m11q5" value="c"><span>cheshire</span></label>
+          <label><input type="radio" name="m11q5" value="d"><span>HikariCP</span></label>
+          <div class="explain" hidden>Migratus/Ragtime apply versioned migration files and record them - the same job Flyway does. HikariCP is the pool itself (both worlds).</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m10-web-backends-ring-reitit.html"><span class="dir">&larr; PREV</span>Module 10 &middot; Web Backends: Ring + Reitit</a>
+      <a class="next" href="m12-frontend-cljs-reagent.html"><span class="dir">NEXT &rarr;</span>Module 12 &middot; Frontend: ClojureScript + Reagent</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

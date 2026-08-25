@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 09 · Macros &amp; Metaprogramming — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m09">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 2 &middot; Idiomatic Power &rsaquo; <b>Module 09</b></nav>
+    <h1>Macros &amp; Metaprogramming</h1>
+    <p class="subtitle">Because code is data, you can write code that writes code &mdash; extending the language itself. Used sparingly, it removes boilerplate forever.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Understand the reader &rarr; macroexpansion &rarr; evaluation pipeline.</li>
+        <li>Master syntax-quote, unquote, splice and auto-gensym.</li>
+        <li>Write safe, useful macros and debug them with <code>macroexpand-1</code>.</li>
+        <li>Know when a plain function is the better answer (usually).</li>
+      </ul>
+    </div>
+
+    <h2>Code is data</h2>
+    <p>The same structures you learned in Module 03 represent source code. Quoting turns off evaluation:</p>
+    <pre><code class="language-clojure">(+ 1 2)          ;=&gt; 3            evaluate: a call
+'( + 1 2)        ;=&gt; (+ 1 2)      quoted:   a list containing symbols
+(first '(+ 1 2)) ;=&gt; +
+(eval '(+ 1 2))  ;=&gt; 3            evaluation is just a function over data!</code></pre>
+    <p>A <strong>macro</strong> is a function that runs at compile time. It receives its arguments
+    <em>unevaluated</em> (as forms) and must return a form to be compiled in their place:</p>
+    <pre><code class="language-clojure">(defmacro my-first [coll]
+  (first coll))
+
+(my-first (+ 1 2))     ; the macro receives the FORM (+ 1 2),
+                       ; calls plain (first ...) on it at COMPILE TIME,
+                       ; and returns the symbol + - so this expression
+                       ; expands to just: +
+(my-first (+ 1 2))     ;=&gt; #object[clojure.core$_PLUS_] ...the function!
+;; silly example - but notice: we computed WITH code, before any runtime.</code></pre>
+
+    <h2>Syntax-quote: templating done right</h2>
+    <pre><code class="language-clojure">`(if ~test ~else ~then)
+;; `  syntax-quote: template; fully qualifies symbols (hygiene!)
+;; ~  unquote: insert runtime values here
+;; ~@ unquote-splicing: splice a LIST into place
+
+(defmacro unless [test &amp; body]
+  `(when-not ~test ~@body))
+
+(unless false (println "runs") :done)     ;=&gt; prints, returns :done
+
+(macroexpand-1 '(unless false :ok))
+;=&gt; (clojure.core/when-not false :ok)     ; inspect what your macro builds</code></pre>
+
+    <h2>The canonical bug: multiple evaluation</h2>
+    <pre><code class="language-clojure">;; naive or - evaluates `a` twice!
+(defmacro bad-or [a b]
+  `(if ~a ~a ~b))
+(bad-or (do (println "side effect!") true) false)   ; prints twice!
+
+;; fix: bind once with an auto-gensym (x# becomes unique per expansion):
+(defmacro my-or [a b]
+  `(let [x# ~a] (if x# x# ~b)))</code></pre>
+    <div class="box warn">
+      <div class="box-title">Macro rules of engagement</div>
+      <p>1) Evaluate each argument-form exactly once &mdash; bind to gensyms.<br>
+      2) Never capture caller variables &mdash; use <code>x#</code>/<code>gensym</code>.<br>
+      3) Write the function first. Only make it a macro if you genuinely need unevaluated forms,
+      custom control flow, or compile-time generation.</p>
+    </div>
+
+    <h2>Useful macros you might actually ship</h2>
+    <pre><code class="language-clojure">;; 1. tracing helper for development:
+(defmacro deftrace [name args &amp; body]
+  `(defn ~name ~args
+     (let [result# (do ~@body)]
+       (println ~(str name) ~args "=&gt;" result#)
+       result#)))
+
+(deftrace add [a b] (+ a b))
+(add 2 3)                    ; prints "add [2 3] =&gt; 5", returns 5
+
+;; 2. retry logic as control flow:
+(defmacro with-retries [n &amp; body]
+  `(loop [tries# ~n]
+     (or (try ~body (catch Exception _# nil))
+         (when (pos? tries#)
+           (Thread/sleep 100)
+           (recur (dec tries#))))))
+
+(with-retries 3 (flaky-api-call))
+
+;; 3. resource management DSL (this IS how with-open works):
+(defmacro with-resource [[bind open close] &amp; body]
+  `(let [~bind ~open]
+     (try ~@body (finally (~close ~bind)))))</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p>What requires annotation processors, compiler plugins, bytecode weaving or Lombok in the JVM mainstream,
+      Clojure does with ordinary functions over code. <code>deftest</code>, <code>-&gt;</code>,
+      <code>with-open</code>, <code>lazy-seq</code> are all library-grade macros &mdash; there is no special
+      "framework magic" layer between you and the language.</p>
+    </div>
+
+    <div class="box tip">
+      <div class="box-title">Security note</div>
+      <p>Never call <code>(eval (read-string user-input))</code> on untrusted input &mdash; that is remote code
+      execution by design. Data should travel as EDN/JSON parsed into maps, never as executable forms.</p>
+    </div>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>You will mostly <em>use</em> macros rather than write them: routing tables, schema definitions, test
+      frameworks and async code all read like little DSLs thanks to macros. Writing them is reserved for killing
+      repeated boilerplate &mdash; exactly the niche Lombok/codegen occupies elsewhere.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>my-when.</strong> Implement <code>(my-when test &amp; body)</code>
+      using only <code>if</code> inside your macro.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defmacro my-when [test &amp; body]
+  `(if ~test (do ~@body) nil))
+
+(macroexpand-1 '(my-when true (prn 1) 42))
+;=&gt; (clojure.core/if true (do (prn 1) 42) nil)</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Infix calculator macro.</strong> Make
+      <code>(math 3 + 4)</code> work by rearranging forms at compile time.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defmacro math [left op right]
+  `(~op ~left ~right))
+
+(math 3 + 4)      ;=&gt; 7
+(math 10 &lt; 99)    ;=&gt; true</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Benchmark macro.</strong> Write <code>(bench expr)</code> returning
+      both the elapsed milliseconds and the result.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defmacro bench [expr]
+  `(let [start# (System/nanoTime)
+         val#   ~expr]
+     {:result  val#
+      :elapsed (/ (- (System/nanoTime) start#) 1e6)}))
+
+(bench (reduce + (range 1000000)))
+;=&gt; {:result 499999500000, :elapsed 12.34}</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Hunt the double-eval.</strong> Fix
+      <code>(defmacro twice [e] `(do ~e ~e))</code> so side effects run once.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defmacro once-but-return-twice [e]
+  `(let [v# ~e] [v# v#]))
+;; general principle: bind every argument-form to a gensym before reuse.</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Explore built-ins.</strong> Run <code>(macroexpand-1)</code> on
+      <code>'(when true 1)</code>, <code>'(-&gt; m (assoc :k 1))</code> and <code>'(.. s trim)</code>; explain in one
+      sentence what each expanded to.
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 09</h2>
+      <form class="quiz" data-quiz="m09">
+        <fieldset class="q" data-answer="c">
+          <legend>1 &middot; When do macros run?</legend>
+          <label><input type="radio" name="m09q1" value="a"><span>At REPL shutdown</span></label>
+          <label><input type="radio" name="m09q1" value="b"><span>Every time the surrounding function executes</span></label>
+          <label><input type="radio" name="m09q1" value="c"><span>At compile time, transforming forms before evaluation/compilation</span></label>
+          <div class="explain" hidden>A macro call is replaced by whatever form the macro returns; the runtime only ever sees the expansion.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>2 &middot; What does <code>~</code> do inside a syntax-quote?</legend>
+          <label><input type="radio" name="m09q2" value="a"><span>Comments out the next form</span></label>
+          <label><input type="radio" name="m09q2" value="b"><span>Evaluates the expression and inserts its value into the template</span></label>
+          <label><input type="radio" name="m09q2" value="c"><span>Quotes the whole template again</span></label>
+          <div class="explain" hidden>` templates (with qualified symbols); ~ switches back to normal evaluation for one sub-form; ~@ splices lists.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>3 &middot; Why use <code>x#</code> instead of <code>x</code> in macro templates?</legend>
+          <label><input type="radio" name="m09q3" value="a"><span>x# becomes a hygienic gensym unique per expansion, avoiding variable capture</span></label>
+          <label><input type="radio" name="m09q3" value="b"><span># makes x private</span></label>
+          <label><input type="radio" name="m09q3" value="c"><span>It's only a naming convention with no effect</span></label>
+          <div class="explain" hidden>Auto-gensyms prevent your internal names from colliding with names the caller uses - a classic macro hygiene bug.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>4 &middot; Which tool shows what a macro call expands into?</legend>
+          <label><input type="radio" name="m09q4" value="a"><span>println-debugging only</span></label>
+          <label><input type="radio" name="m09q4" value="b"><span>(source ...)</span></label>
+          <label><input type="radio" name="m09q4" value="c"><span>(doc ...)</span></label>
+          <label><input type="radio" name="m09q4" value="d"><span>(macroexpand-1 '...)</span></label>
+          <div class="explain" hidden>macroexpand-1 performs one expansion step - essential for debugging your own and understanding others' macros.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>5 &middot; What's the community rule of thumb about writing macros?</legend>
+          <label><input type="radio" name="m09q5" value="a"><span>Always prefer macros - they're faster</span></label>
+          <label><input type="radio" name="m09q5" value="b"><span>Write a function first; reach for a macro only when you need unevaluated forms or custom control flow</span></label>
+          <label><input type="radio" name="m09q5" value="c"><span>Macros are deprecated since 1.9</span></label>
+          <div class="explain" hidden>Functions compose, pass as values and test trivially. Macros are for syntactic abstraction - powerful but costlier to reason about.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m08-java-interop.html"><span class="dir">&larr; PREV</span>Module 08 &middot; Java Interop for JVM Veterans</a>
+      <a class="next" href="m10-web-backends-ring-reitit.html"><span class="dir">NEXT &rarr;</span>Module 10 &middot; Web Backends: Ring + Reitit</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

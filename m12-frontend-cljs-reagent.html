@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 12 · Frontend: ClojureScript + Reagent — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m12">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 3 &middot; Real Applications &rsaquo; <b>Module 12</b></nav>
+    <h1>Frontend: ClojureScript + Reagent</h1>
+    <p class="subtitle">Your React skills translate almost one-to-one: same model, but components return hiccup vectors and local state is an atom.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Understand the ClojureScript toolchain (shadow-cljs + npm).</li>
+        <li>Write Reagent components: hiccup, form-1/2 components, controlled inputs.</li>
+        <li>Map every React hook you know to its Reagent/re-frame counterpart.</li>
+        <li>Consume your Module&nbsp;10 backend and manage state at scale with re-frame.</li>
+      </ul>
+    </div>
+
+    <h2>What is ClojureScript?</h2>
+    <p>ClojureScript is Clojure compiling to JavaScript instead of JVM bytecode &mdash; same language,
+    same immutable collections, different runtime. The build tool you'll meet everywhere is
+    <strong>shadow-cljs</strong>: first-class npm interop, fast incremental builds and hot reload.</p>
+    <pre><code class="language-clojure">;; shadow-cljs.edn
+{:deps true
+ :dev-http {8080 "public"}                       ; dev server + live reload
+ :builds
+ {:app {:target     :browser
+        :output-dir "public/js"
+        :asset-path "/js"
+        :modules    {:main {:init-fn shop.ui/init}}
+        :release    {:compiler-options {:optimizations :advanced}}}}}</code></pre>
+    <pre><code class="language-bash">npm install react react-dom
+npm install --save-dev shadow-cljs
+npx shadow-cljs watch app        # develop
+npx shadow-cljs release app      # production bundle (advanced DCE)</code></pre>
+
+    <h2>Hiccup: JSX without JSX</h2>
+    <p>Components are functions returning vectors: tag keyword, optional attrs map, children.</p>
+    <pre><code class="language-clojure">[:div.card "Hello"]                        ;=&lt; div class="card"&gt;
+[:input {:type "email" :placeholder "you@x.io"}]
+[:div#app                                  ; id sugar
+ [:nav.navbar "..."]
+ [:main
+  [:p "nested " [:b "children"]]]]
+
+[:&gt;                                        ; fragment
+ [:li "a"] [:li "b"]]</code></pre>
+
+    <h2>Reagent = React, translated</h2>
+    <pre><code class="language-clojure">(ns shop.ui
+  (:require [reagent.core :as r]
+            [react-dom/client :as rc]))
+
+;; Form-1: pure props -&gt; markup (like a function component)
+(defn badge [{:keys [label color]}]
+  [:span.badge {:style {:background color}} label])
+
+;; Form-2: local state - closure over a reactive atom (like useState):
+(defn counter []
+  (let [count (r/atom 0)]                 ; created once per mounted instance
+    (fn []                                 ; this inner fn re-renders
+      [:button {:on-click #(swap! count inc)}
+       "Clicked " @count " times"])))     ; deref = subscribe to changes
+
+(defn init []
+  (rc/render [counter]                     ; note: [component], not (component)
+             (.getElementById js/document "root")))</code></pre>
+
+    <h2>Your hooks, mapped</h2>
+    <table>
+      <tr><th>React / TS</th><th>ClojureScript world</th></tr>
+      <tr><td><code>useState</code></td><td><code>r/atom</code> dereferenced in render</td></tr>
+      <tr><td><code>useEffect</code> mount/cleanup</td><td>Form-3 components (<code>:component-did-mount</code>, <code>:component-will-unmount</code>) or <code>r/with-let</code> + <code>finally</code></td></tr>
+      <tr><td><code>useMemo</code></td><td>usually unnecessary &mdash; immutable data makes equality cheap; <code>=</code> comparisons just work</td></tr>
+      <tr><td>props drilling / context</td><td>plain arguments, or re-frame subscriptions</td></tr>
+      <tr><td><code>key</code> in lists</td><td><code>^{:key id}</code> metadata on each child vector</td></tr>
+      <tr><td>Redux / Zustand</td><td>re-frame (events, subscriptions, single app-db)</td></tr>
+      <tr><td>React Router</td><td>Reitit's frontend routing (same library name as Module 10!)</td></tr>
+      <tr><td>Vite dev server</td><td>shadow-cljs <code>dev-http</code> with hot reload</td></tr>
+    </table>
+
+    <h2>A real component: todo list</h2>
+    <pre><code class="language-clojure">(def todos (r/atom []))
+(def draft (r/atom ""))
+
+(defn add-todo []
+  (when-not (clojure.string/blank? @draft)
+    (swap! todos conj {:id (random-uuid) :label @draft :done false})
+    (reset! draft "")))
+
+(defn toggle [id]
+  (swap! todos (fn [ts]
+                 (mapv (fn [t] (if (= id (:id t)) (update t :done not) t))
+                       ts))))
+
+(defn todo-app []
+  [:div
+   [:input {:value @draft                                   ; controlled input
+            :on-change #(reset! draft (.. % -target -value))
+            :on-key-down #(when (= "Enter" (.-key %)) (add-todo))}]
+   [:button {:on-click add-todo} "Add"]
+   [:ul
+    (for [{:keys [id label done]} @todos]
+      ^{:key id}
+      [:li {:class (when done "done")
+            :on-click #(toggle id)}
+       label])]])</code></pre>
+
+    <h2>Talking to your Module 10 API</h2>
+    <pre><code class="language-clojure">(def items-state (r/atom {:status :loading}))
+
+(defn fetch-items! []
+  (reset! items-state {:status :loading})
+  (-&gt; (js/fetch "/api/items")
+      (.then #(.json %))
+      (.then (fn [json]
+               (let [data (js-&gt;clj json :keywordize-keys true)]
+                 (reset! items-state {:status :ready :items data}))))
+      (.catch #(reset! items-state {:status :error :message (str %)}))))
+
+(defn items-page []
+  (r/with-let [_ (fetch-items!)]                  ; fetch once on mount
+    (case (:status @items-state)
+      :loading [:p "Loading..."]
+      :error   [:p.error (:message @items-state)]
+      :ready   [:ul
+                (for [{:keys [id name]} (:items @items-state)]
+                  ^{:key id} [:li name])])))</code></pre>
+
+    <h2>re-frame when the app grows</h2>
+    <p>Plain atoms scale further than people expect. When many views share state and flows get complex,
+    <strong>re-frame</strong> gives you the Redux-shaped discipline &mdash; unidirectional data flow around one
+    central database:</p>
+    <pre><code class="language-clojure">(require '[re-frame.core :as rf])
+
+;; the entire app state lives in ONE map (an atom under the hood):
+(rf/reg-event-db                       ; event handler = pure transition
+ ::add-item
+ (fn [db [_ item]]
+   (update db ::items conj item)))
+
+(rf/reg-sub                            ; subscription = derived query
+ ::items
+ (fn [db _]
+   (::items db)))
+
+;; views dispatch events and subscribe to queries:
+[:button {:on-click #(rf/dispatch [::add-item {:name "widget"}])}]
+
+(let [items @(rf/subscribe [::items])]
+  [:ul (for [{:keys [name]} items] ^{:key name} [:li name])])</code></pre>
+    <ul>
+      <li><strong>Effects</strong> (HTTP, timers) are declared as data (<code>:http-xhrio</code>, custom fx) keeping handlers pure and testable.</li>
+      <li>Interceptors (middleware again!) handle logging, undo, validation.</li>
+      <li>Time-travel devtools included.</li>
+    </ul>
+
+    <div class="box warn">
+      <div class="box-title">JS interop survival kit</div>
+      <pre><code class="language-clojure">(.-title obj)                      ; property access
+(.log js/console "hi")             ; method call
+(js->clj obj :keywordize-keys true) ; JS object -&gt; Clojure map
+(clj-&gt;js m)                        ; back again
+#js {:onClick handlerFn}           ; raw JS object literal (for libs needing it)
+(= 1 (js/parseInt "1"))            ; JS numbers are doubles - mind integer math</code></pre>
+      <p>Rule of thumb: convert at the edges, live in maps inside your app.</p>
+    </div>
+
+    <div class="box analogy">
+      <div class="box-title">Should you switch from React/TS?</div>
+      <p>ClojureScript shines when one team owns both ends: shared Malli schemas validate payloads identically
+      front and back, and there is exactly one language semantics to reason about. TypeScript offers richer
+      ecosystem hiring and editor inference. Many teams keep TS on huge consumer apps and use CLJS where
+      full-stack coherence wins &mdash; internal tools, dashboards, startups shipping fast.</p>
+    </div>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p><strong>Figma's</strong> multiplayer engine runs ClojureScript compiled to JavaScript on their servers;
+      <strong>Pitch</strong> built its presentation editor UI with Reagent; <strong>Roam Research</strong> is a
+      full CLJS application. Nubank builds customer web experiences on the same stack.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Scaffold.</strong> Create the shadow-cljs project above, verify
+      the counter renders on localhost:8080, then edit its label and watch hot reload update without losing click count.
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Todo polish.</strong> Add a delete button per item and a footer
+      showing <code>n left</code> using <code>(count (remove :done @todos))</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn remove-todo [id]
+  (swap! todos (fn [ts] (filterv #(not= id (:id %)) ts))))
+
+[:footer (count (remove :done @todos)) " left"]</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Wire the API.</strong> Point <code>fetch-items!</code> at your
+      Module 10 Jetty service (configure CORS or proxy through dev-http) and render real rows.
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Derived view.</strong> Show only unfinished todos behind a
+      checkbox filter; compute the visible list inside render from two atoms.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def show-done (r/atom false))
+
+(let [visible (if @show-done @todos (remove :done @todos))]
+  [:div
+   [:label [:input {:type "checkbox"
+                    :checked @show-done
+                    :on-change #(swap! show-done not)}] " show done"]
+   [:ul (for [{:keys [id label]} visible] ^{:key id} [:li label])]])</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>re-frame counter.</strong> Convert the counter to
+      <code>::inc</code> event + <code>::count</code> subscription; add a second button dispatching
+      <code>[::inc -1]</code>.
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 12</h2>
+      <form class="quiz" data-quiz="m12">
+        <fieldset class="q" data-answer="c">
+          <legend>1 &middot; What does Reagent do that triggers a re-render?</legend>
+          <label><input type="radio" name="m12q1" value="a"><span>A virtual DOM diff scheduled by setInterval</span></label>
+          <label><input type="radio" name="m12q1" value="b"><span>You call setState explicitly</span></label>
+          <label><input type="radio" name="m12q1" value="c"><span>Dereferencing an r/atom during render subscribes that component to it; swaps rerender automatically</span></label>
+          <div class="explain" hidden>Deref tracking replaces useState/useSelector wiring: @atom in render = dependency declaration.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>2 &middot; In hiccup, how do you render a link?</legend>
+          <label><input type="radio" name="m12q2" value="a"><span>&lt;a&gt;text&lt;/a&gt;</span></label>
+          <label><input type="radio" name="m12q2" value="b"><span><code>[:a {:href "/about"} "About"]</code></span></label>
+          <label><input type="radio" name="m12q2" value="c"><span>(link "/about" "About")</span></label>
+          <div class="explain" hidden>Vectors all the way down: tag keyword, attributes map, children.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>3 &middot; re-frame architecture most closely mirrors which React ecosystem pattern?</legend>
+          <label><input type="radio" name="m12q3" value="a"><span>Higher-order components</span></label>
+          <label><input type="radio" name="m12q3" value="b"><span>Render props</span></label>
+          <label><input type="radio" name="m12q3" value="c"><span>Error boundaries</span></label>
+          <label><input type="radio" name="m12q3" value="d"><span>Redux-style unidirectional flow with events/subscriptions over a single store</span></label>
+          <div class="explain" hidden>dispatch [event] -&gt; pure handler updates app-db -&gt; memoized subs notify views. Effects are data, interceptors are middleware.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>4 &middot; Why is <code>^{:key id}</code> needed when rendering lists?</legend>
+          <label><input type="radio" name="m12q4" value="a"><span>Same as React keys - stable identity so DOM reconciliation matches items correctly</span></label>
+          <label><input type="radio" name="m12q4" value="b"><span>It encrypts the element</span></label>
+          <label><input type="radio" name="m12q4" value="c"><span>Only required for tables</span></label>
+          <div class="explain" hidden>Identical concept to React's key prop, expressed as metadata on the hiccup vector.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>5 &middot; A famous production system written in ClojureScript running server-side belongs to&hellip;</legend>
+          <label><input type="radio" name="m12q5" value="a"><span>Twitter's analytics</span></label>
+          <label><input type="radio" name="m12q5" value="b"><span>Amazon checkout</span></label>
+          <label><input type="radio" name="m12q5" value="c"><span>Figma's multiplayer editing engine</span></label>
+          <div class="explain" hidden>Figma compiles its OT/multiplayer logic (ClojureScript) to JS and runs it on Node servers - one language across client and server logic.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m11-postgres-nextjdbc-honeysql.html"><span class="dir">&larr; PREV</span>Module 11 &middot; PostgreSQL: next.jdbc + HoneySQL</a>
+      <a class="next" href="m13-testing-capstone.html"><span class="dir">NEXT &rarr;</span>Module 13 &middot; Testing &amp; Capstone Project</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

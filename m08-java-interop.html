@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 08 · Java Interop for JVM Veterans — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m08">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 2 &middot; Idiomatic Power &rsaquo; <b>Module 08</b></nav>
+    <h1>Java Interop for JVM Veterans</h1>
+    <p class="subtitle">Your years of Java knowledge are not wasted &mdash; every library and idiom you know is one syntax away. Plus: typed data with records and protocols.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Call Java methods, constructors, statics and fields fluently.</li>
+        <li>Leverage java.time, BigDecimal and Maven dependencies directly.</li>
+        <li>Create typed domain values with <code>defrecord</code>.</li>
+        <li>Add polymorphism with <code>defprotocol</code>/<code>extend-type</code> and <code>reify</code>.</li>
+      </ul>
+    </div>
+
+    <h2>The interop syntax tour</h2>
+    <pre><code class="language-clojure">;; instance method:
+(.toUpperCase "clojure")            ;=&gt; "CLOJURE"
+(.isBefore (java.time.LocalDate/now)
+           (java.time.LocalDate/of 2030 1 1))
+
+;; constructor - the dot suffix:
+(java.util.ArrayList. [1 2 3])
+(new java.util.HashMap)             ; same thing, longer form
+
+;; static method / field:
+(Math/abs -5)                       ;=&gt; 5
+(java.lang.Integer/MAX_VALUE)       ;=&gt; 2147483647
+(System/getenv "HOME")
+
+;; chained calls with the .. macro:
+(.. (java.time.LocalDate/now) getDayOfWeek toString)
+
+;; builder-style mutation with doto:
+(doto (java.util.HashMap.)
+  (.put "env" "prod")
+  (.put "shards" 8))</code></pre>
+
+    <h2>Daily-driver Java from Clojure</h2>
+    <pre><code class="language-clojure">(import '[java.time LocalDate Duration ZoneId]
+        '[java.time.format DateTimeFormatter])
+
+(def fmt (DateTimeFormatter/ofPattern "dd/MM/yyyy"))
+(.format fmt (LocalDate/now))
+
+(-> (LocalDate/parse "2024-03-01")
+    (.plusMonths 2)
+    (.plusDays 7)
+    (.atStartOfDay (ZoneId/of "Europe/London")))
+
+;; exact decimal money - the JVM way:
+(import 'java.math.BigDecimal)
+(+ (BigDecimal. "0.10") (BigDecimal. "0.20"))
+;=&gt; 0.30     ; no floating point surprises
+
+(java.util.UUID/randomUUID)</code></pre>
+
+    <h2>Maven dependencies: your existing universe</h2>
+    <pre><code class="language-clojure">;; deps.edn - coordinates look exactly like Gradle's, minus the ceremony
+{:paths ["src"]
+ :deps {org.clojure/clojure   {:mvn/version "1.12.1"}
+        cheshire/cheshire     {:mvn/version "5.13.0"}   ; wraps Jackson
+        com.zaxxer/HikariCP   {:mvn/version "5.1.0"}}}  ; the pool Spring Boot uses</code></pre>
+    <pre><code class="language-clojure">;; JSON via Jackson under the hood:
+(require '[cheshire.core :as json])
+(json/generate-string {:name "Ada" :roles ["admin"]})
+;=&gt; "{\"name\":\"Ada\",\"roles\":[\"admin\"]}"
+(json/parse-string "{\"age\":36}" true)          ; true = keywordize keys
+;=&gt; {:age 36}</code></pre>
+
+    <h2>defrecord: typed data without Lombok</h2>
+    <pre><code class="language-clojure">(defrecord User [id email roles])
+
+(def u (->User 1 "ada@x.io" #{:admin}))   ; positional factory
+(:email u)                                ;=&gt; "ada@x.io"
+(u :email)                                ;=&gt; "ada@x.io"  still map-like!
+(assoc u :premium true)                   ; works like a map
+
+;; shape-changing ops return plain maps:
+(assoc u :anything-new 42)                ;=&gt; a map now, not a User
+
+(map? u)                                  ;=&gt; false (but associative? =&gt; true)
+= compares records by fields, like Kotlin data classes.</code></pre>
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p><code>defrecord</code> generates a final class with an immutable-fields constructor, correct
+      equals/hashCode/toString and keyword accessors &mdash; essentially a Lombok <code>@Value</code> /
+      Kotlin <code>data class</code> in one line, that also behaves like a map so all of Module 03's tools apply.
+      Use records for hot paths and stable domain entities; plain maps everywhere else.</p>
+    </div>
+
+    <h2>Protocols: interfaces you can add to any type</h2>
+    <pre><code class="language-clojure">(defprotocol Area
+  "Things that occupy space."
+  (area [shape]))
+
+(defrecord Rect [w h]
+  Area
+  (area [_] (* w h)))
+
+(defrecord Circle [r]
+  Area
+  (area [_] (* Math/PI r r)))
+
+(area (->Rect 2 3))          ;=&gt; 6
+(area (->Circle 1))          ;=&gt; 3.14159...
+
+;; retro-fit types you don't own:
+(extend-type String
+  Area
+  (area [s] (count s)))
+(area "hello")               ;=&gt; 5
+
+;; inline implementations (anonymous-class style):
+(def task
+  (reify Runnable
+    (run [_] (println "running!"))))
+(.start (Thread. task))</code></pre>
+    <p>Protocol dispatch is by type, compiled to fast JVM calls (no reflection). When dispatch should depend on
+    a <em>value</em> instead (e.g., a <code>:type</code> field), multimethods are the tool:</p>
+    <pre><code class="language-clojure">(defmulti fee :tier)
+(defmethod fee :free   [_] 0)
+(defmethod fee :pro    [_] 9)
+(defmethod fee :default [_] 49)
+
+(fee {:tier :pro})           ;=&gt; 9</code></pre>
+
+    <h2>Type hints &amp; arrays, briefly</h2>
+    <pre><code class="language-clojure">;; reflection warnings tell you where interop can't infer a type:
+(set! *warn-on-reflection* true)
+
+;; a hint silences them and restores primitive speed:
+(defn shout [^String s] (.toUpperCase s))
+
+;; raw arrays when a library demands them (otherwise use vectors):
+(def arr (into-array String ["a" "b"]))
+(aget arr 0)                 ;=&gt; "a"
+(alength arr)                ;=&gt; 2</code></pre>
+
+    <h2>Packaging it up</h2>
+    <p><code>clj -T:build uber</code> (tools.build) or <code>lein uberjar</code> produce a fat jar exactly like
+    Spring Boot's &mdash; <code>java -jar app.jar</code> and you're deployed. The GraalVM native-image story also
+    applies, and Babashka (Module 01) is precompiled Clojure for instant-start scripts.</p>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>This module is why enterprises adopt Clojure incrementally: Kafka producers, AWS SDK calls, Netty
+      handlers and Hikari pools are used directly, while business logic stays functional. Records+protocols model
+      payment providers or notification channels behind one protocol &mdash; strategy pattern in three lines.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Date arithmetic.</strong> Compute how many days until next New
+      Year using only <code>LocalDate</code> interop.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">;; .until with a ChronoLocalDate returns whole days:
+(.until (java.time.LocalDate/now)
+            (java.time.LocalDate/of 2027 1 1))
+;=&gt; e.g. 126
+
+;; explicit unit version:
+(.until (java.time.LocalDate/now)
+            (java.time.LocalDate/of 2027 1 1)
+            java.time.temporal.ChronoUnit/DAYS)</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Money record.</strong> Define <code>(defrecord Money [amount currency])</code>,
+      create EUR 5.00, and implement a <code>Display</code> protocol with <code>(show m)</code> returning
+      <code>"EUR 5.00"</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defprotocol Display (show [x]))
+
+(defrecord Money [amount currency]
+  Display
+  (show [_] (str currency " " (format "%.2f" amount))))
+
+(show (->Money 5.0M :eur))    ;=&gt; ":eur 5.00" - store currency as string to be neat</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Builder pattern, gone.</strong> Build a
+      <code>StringBuilder</code> containing <code>"a-b-c"</code> using <code>doto</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(str (doto (StringBuilder.)
+       (.append "a") (.append "-") (.append "b")
+       (.append "-") (.append "c")))
+;=&gt; "a-b-c"</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Catch the overflow.</strong> Call <code>(/ 1 0)</code>, catch the
+      exception, and print its message.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(try (/ 1 0)
+  (catch ArithmeticException e
+    (println (.getMessage e))))
+;=&gt; Divide by zero</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Retrofit behavior.</strong> Extend <code>Number</code>-like
+      behavior onto <code>Long</code>: make <code>(show 5)</code> return <code>"#5"</code> via your
+      <code>Display</code> protocol from Task 2.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(extend-type Long
+  Display
+  (show [n] (str "#" n)))
+
+(show 5)      ;=&gt; "#5"
+;; Protocols can be implemented for any JVM class after the fact -
+;; impossible with Java interfaces without wrappers.</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 08</h2>
+      <form class="quiz" data-quiz="m08">
+        <fieldset class="q" data-answer="c">
+          <legend>1 &middot; How do you call the instance method <code>isEmpty</code> on object <code>s</code>?</legend>
+          <label><input type="radio" name="m08q1" value="a"><span><code>(s isEmpty)</code></span></label>
+          <label><input type="radio" name="m08q1" value="b"><span><code>(isEmpty s)</code></span></label>
+          <label><input type="radio" name="m08q1" value="c"><span><code>(.isEmpty s)</code></span></label>
+          <div class="explain" hidden>A leading dot means "call this method on the first argument": (.isEmpty s), optionally followed by method arguments.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>2 &middot; What does <code>(java.util.Date.)</code> do?</legend>
+          <label><input type="radio" name="m08q2" value="a"><span>Creates a new Date via its constructor</span></label>
+          <label><input type="radio" name="m08q2" value="b"><span>Calls the static method Date()</span></label>
+          <label><input type="radio" name="m08q2" value="c"><span>Nothing - invalid syntax</span></label>
+          <div class="explain" hidden>The trailing dot sugar constructs an object; (new java.util.Date) is the explicit equivalent.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>3 &middot; A record updated with <code>assoc</code> using a brand-new key&hellip;</legend>
+          <label><input type="radio" name="m08q3" value="a"><span>stays a record of the same type</span></label>
+          <label><input type="radio" name="m08q3" value="b"><span>returns a plain map - the shape changed</span></label>
+          <label><input type="radio" name="m08q3" value="c"><span>throws an exception</span></label>
+          <div class="explain" hidden>Records preserve their type only across operations that keep their declared fields; adding/removing keys yields ordinary maps.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>4 &middot; When would you pick a multimethod over a protocol?</legend>
+          <label><input type="radio" name="m08q4" value="a"><span>Never - protocols replace them</span></label>
+          <label><input type="radio" name="m08q4" value="b"><span>Only inside macros</span></label>
+          <label><input type="radio" name="m08q4" value="c"><span>When performance is critical</span></label>
+          <label><input type="radio" name="m08q4" value="d"><span>When dispatch depends on a value (like a :type field) rather than the argument's class</span></label>
+          <div class="explain" hidden>Protocols dispatch on type; multimethods dispatch via any function of the arguments - tags, tuples, arbitrary logic.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>5 &middot; Where do third-party Java libraries come from in a Clojure project?</legend>
+          <label><input type="radio" name="m08q5" value="a"><span>Maven Central, declared in deps.edn - same jars Gradle uses</span></label>
+          <label><input type="radio" name="m08q5" value="b"><span>Special Clojure-only ports</span></label>
+          <label><input type="radio" name="m08q5" value="c"><span>You must copy jar files manually</span></label>
+          <div class="explain" hidden>Clojure consumes the entire Maven ecosystem natively - Jackson, Kafka clients, AWS SDK, HikariCP - with identical versioning semantics.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m07-state-concurrency.html"><span class="dir">&larr; PREV</span>Module 07 &middot; State &amp; Concurrency</a>
+      <a class="next" href="m09-macros-metaprogramming.html"><span class="dir">NEXT &rarr;</span>Module 09 &middot; Macros &amp; Metaprogramming</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

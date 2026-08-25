@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 07 · State &amp; Concurrency — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m07">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 2 &middot; Idiomatic Power &rsaquo; <b>Module 07</b></nav>
+    <h1>State &amp; Concurrency</h1>
+    <p class="subtitle">Immutable values plus a small set of explicit reference types &mdash; atoms, refs (STM), agents &mdash; and channels for coordination.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Internalize identity-vs-value: references point to successive immutable values.</li>
+        <li>Pick the right reference type for each situation.</li>
+        <li>Use atoms safely (and understand why swap! functions must be pure).</li>
+        <li>Coordinate multi-step updates with software transactional memory.</li>
+      </ul>
+    </div>
+
+    <h2>The mental model that changes everything</h2>
+    <p>In Java, an object's fields change in place while other threads may be reading them &mdash; hence locks,
+    volatile, concurrent collections. Clojure separates the two concerns:</p>
+    <ul>
+      <li><strong>Values</strong> never change (Module 03).</li>
+      <li><strong>Identities</strong> are named cells that point to successive values over time.</li>
+    </ul>
+    <pre><code class="language-clojure">(def account (atom {:owner "ada" :balance 100}))
+;; 'account' is the identity; each snapshot it points to is an immutable value.
+
+@account                        ;=&gt; {:owner "ada", :balance 100}   current value
+
+(swap! account update :balance + 50)
+@account                        ;=&gt; {:owner "ada", :balance 150}</code></pre>
+
+    <h2>Atoms: your AtomicReference, but nicer</h2>
+    <pre><code class="language-clojure">(def hits (atom 0))
+
+(swap! hits inc)                 ; compare-and-swap loop under the hood
+(swap! hits + 10)                ; apply any function to current value
+(reset! hits 0)                  ; unconditional overwrite
+
+;; swap! retries on contention - so the function must be PURE:
+(swap! hits (fn [n] (inc n)))    ; good: no side effects inside
+
+;; validation and observation:
+(def port (atom 8080
+           :validator #(or (nil? %) (pos? %))))     ; rejects invalid states
+(add-watch hits :audit
+           (fn [_key _ref old new]
+             (println "hits:" old "-&gt;" new)))
+(remove-watch hits :audit)</code></pre>
+    <div class="box warn">
+      <div class="box-title">Classic bug</div>
+      <p>Never do side effects (logging, HTTP calls, DB writes) inside a <code>swap!</code>: contention causes
+      retries, so your effect can run twice. Compute the new state purely, then perform effects outside &mdash;
+      or reach for agents/channels which serialize effects exactly once.</p>
+    </div>
+
+    <h2>Refs &amp; STM: transactions across multiple identities</h2>
+    <p>Sometimes one logical operation must touch several pieces of state atomically &mdash; the classic money
+    transfer. Clojure ships a <em>software transactional memory</em>:</p>
+    <pre><code class="language-clojure">(def alice (ref 100))
+(def bob   (ref 50))
+
+(dosync
+  (alter alice - 30)
+  (alter bob   + 30))
+;; both succeed or both roll back - no locks held across user code.
+
+[@alice @bob]                    ;=&gt; [70 80]
+
+;; commute: order doesn't matter (e.g., adding to a set) - more concurrency:
+(dosync (commute bob + 5))</code></pre>
+    <div class="box tip">
+      <div class="box-title">Pragmatic reality check</div>
+      <p>STM is elegant but rare in application code. Most systems model shared state as <strong>one atom
+      holding the whole world</strong> (a single map), updated transactionally by pure functions &mdash; this is
+      precisely how re-frame manages all frontend state (Module 12). Reach for refs only when independent
+      identities genuinely need coordinated commits.</p>
+    </div>
+
+    <h2>Agents, vars, futures, promises</h2>
+    <pre><code class="language-clojure">;; Agent: asynchronous, serialized updates - actions queue up.
+(def logger (agent []))
+(send logger conj "event-1")          ; runs later, once, on one thread
+(send-off logger conj "blocking-io")  ; variant for blocking work
+(await logger)                        ; wait until queued actions finish
+@logger                               ;=&gt; ["event-1" "blocking-io"]
+
+;; Dynamic vars: thread-local context (like MDC / ThreadLocal).
+(def ^:dynamic *request-id* nil)
+(binding [*request-id* "abc-123"]
+  (handle-request))
+
+;; Futures & promises: one-shot concurrency primitives.
+(def result (future (expensive-computation)))   ; starts immediately
+(def ready  (promise))
+(deliver ready {:ok true})
+@ready
+
+;; pmap: parallel map over expensive pure work.
+(pmap #(fetch-url %) urls)</code></pre>
+
+    <h2>core.async: channels instead of callback pyramids</h2>
+    <pre><code class="language-clojure">(require '[clojure.core.async :as a])
+
+(def jobs (a/chan 10))                       ; buffered channel
+
+;; three workers pulling from the same channel:
+(dotimes [worker 3]
+  (a/go-loop []
+    (when-let [job (a/&lt;! jobs)]              ; park (non-blocking wait)
+      (process job)
+      (recur))))
+
+(a/go (a/&gt;! jobs "task-a"))                  ; put from a go block
+(a/thread (a/&gt;!! jobs "task-b"))             ; blocking put off-thread
+
+(a/close! jobs)</code></pre>
+    <p><code>go</code> blocks compile to a state machine &mdash; like Kotlin coroutines' suspension, though without
+    structured cancellation. Channels give you queues, fan-out/fan-in, timeouts (<code>a/timeout</code>) and
+    pipelines as first-class values.</p>
+
+    <h2>Choosing the right tool</h2>
+    <table>
+      <tr><th>Situation</th><th>Reach for</th></tr>
+      <tr><td>Caches, counters, app config, whole-app state</td><td><code>atom</code></td></tr>
+      <tr><td>Invariants spanning several entities</td><td><code>ref</code> + <code>dosync</code> (or redesign into one atom)</td></tr>
+      <tr><td>Queued background writes (audit logs, metrics flushes)</td><td><code>agent</code> or a channel</td></tr>
+      <tr><td>Producer/consumer, backpressure, pipelines</td><td><code>core.async</code></td></tr>
+      <tr><td>Per-request context (trace IDs, locales)</td><td>dynamic <code>binding</code></td></tr>
+      <tr><td>One-off parallel computation</td><td><code>future</code>/<code>pmap</code></td></tr>
+    </table>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <table>
+        <tr><th>JVM/Kotlin tool</th><th>Clojure counterpart</th></tr>
+        <tr><td><code>AtomicReference.updateAndGet</code></td><td><code>swap!</code></td></tr>
+        <tr><td><code>synchronized</code> blocks / locks</td><td>rarely needed &mdash; immutability removes most sharing hazards</td></tr>
+        <tr><td><code>ConcurrentHashMap</code> merge</td><td><code>swap!</code> with <code>update</code>/<code>merge</code> on a map atom</td></tr>
+        <tr><td>Transactions across services/DBs</td><td>refs (STM) within a process</td></tr>
+        <tr><td>Kotlin channels/coroutines</td><td>core.async go blocks/channels</td></tr>
+      </table>
+    </div>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Nubank credits Clojure's state model as a key reason their teams can evolve financial logic safely:
+      business rules are pure transformations of immutable data, and mutation happens at explicit, audited
+      boundaries. Rate limiters, caches and circuit breakers are typically a few lines around an atom.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Race-safe ID generator.</strong> Create an atom-based generator
+      returning sequential ids like <code>"user-1"</code>, <code>"user-2"</code>&hellip; Call it from two threads
+      and confirm no duplicates.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def next-id (atom 0))
+
+(defn new-user-id []
+  (str "user-" (swap! next-id inc)))
+
+(new-user-id)   ;=&gt; "user-1"
+;; swap!'s CAS loop makes concurrent calls safe without locks.</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Audited cache.</strong> Make an atom holding a map; add a watch
+      that records every change into a second atom (key, old value, new value).
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def cache (atom {}))
+(def audit (atom []))
+
+(add-watch cache :log
+  (fn [_ _ k old new]
+    (swap! audit conj {:key k :old old :new new})))
+
+(swap! cache assoc "a" 1)
+@audit   ;=&gt; [{:key "a", :old {}, :new {"a" 1}}]</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Atomic transfer.</strong> With two refs holding balances, write
+      <code>(transfer! from to amount)</code> using <code>dosync</code>; make it throw when funds are insufficient
+      so nothing changes at all.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn transfer! [from to amount]
+  (dosync
+    (when (&lt; @from amount)
+      (throw (ex-info "insufficient funds" {:amount amount})))
+    (alter from - amount)
+    (alter to   + amount)))
+
+(transfer! alice bob 20)   ; both refs update together or not at all</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Worker pool.</strong> Set up a channel plus three
+      <code>go-loop</code> workers that print each received item; push five items through and close the channel.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(require '[clojure.core.async :as a])
+
+(def ch (a/chan))
+(dotimes [w 3]
+  (a/go-loop []
+    (when-let [x (a/&lt;! ch)]
+      (println "worker" w ":" x)
+      (recur))))
+
+(doseq [x (range 5)] (a/go (a/&gt;! ch x)))
+(Thread/sleep 500)         ; let go blocks drain (demo only)
+(a/close! ch)</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 07</h2>
+      <form class="quiz" data-quiz="m07">
+        <fieldset class="q" data-answer="b">
+          <legend>1 &middot; Which reference type covers most day-to-day application state?</legend>
+          <label><input type="radio" name="m07q1" value="a"><span>ref</span></label>
+          <label><input type="radio" name="m07q1" value="b"><span>atom</span></label>
+          <label><input type="radio" name="m07q1" value="c"><span>agent</span></label>
+          <label><input type="radio" name="m07q1" value="d"><span>volatile everywhere</span></label>
+          <div class="explain" hidden>Atoms handle uncoordinated synchronous updates - counters, caches, config, even entire app state as one map. Refs/agents cover special cases.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>2 &middot; Why must functions passed to <code>swap!</code> be pure?</legend>
+          <label><input type="radio" name="m07q2" value="a"><span>Because atoms run them on multiple threads simultaneously</span></label>
+          <label><input type="radio" name="m07q2" value="b"><span>Because they are memoized</span></label>
+          <label><input type="radio" name="m07q2" value="c"><span>Because swap! retries on contention, so side effects could happen twice</span></label>
+          <div class="explain" hidden>Under contention the CAS loop re-runs the function against the latest value. Duplicate side effects would corrupt logs, HTTP calls, DB rows...</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>3 &middot; What does <code>(dosync ...)</code> guarantee?</legend>
+          <label><input type="radio" name="m07q3" value="a"><span>All ref alterations commit together or none do (atomicity across refs)</span></label>
+          <label><input type="radio" name="m07q3" value="b"><span>That the block runs on a dedicated thread pool</span></label>
+          <label><input type="radio" name="m07q3" value="c"><span>Durability after process restarts</span></label>
+          <div class="explain" hidden>dosync wraps ref operations in an STM transaction - consistent snapshots, automatic retries on conflict.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>4 &middot; An agent differs from an atom because&hellip;</legend>
+          <label><input type="radio" name="m07q4" value="a"><span>agents are faster under heavy read load</span></label>
+          <label><input type="radio" name="m07q4" value="b"><span>agents validate every update</span></label>
+          <label><input type="radio" name="m07q4" value="c"><span>agents can hold any Java object</span></label>
+          <label><input type="radio" name="m07q4" value="d"><span>updates are applied asynchronously and serially via send/send-off</span></label>
+          <div class="explain" hidden>You enqueue actions; they execute later, one at a time, in submission order per agent - ideal for serialized background writes.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>5 &middot; In core.async, what is special about <code>a/&lt;!</code> inside a <code>go</code> block?</legend>
+          <label><input type="radio" name="m07q5" value="a"><span>It throws when the channel is empty</span></label>
+          <label><input type="radio" name="m07q5" value="b"><span>It parks the lightweight process instead of blocking a thread</span></label>
+          <label><input type="radio" name="m07q5" value="c"><span>It reads without removing the value</span></label>
+          <div class="explain" hidden>Inside go blocks you use parking ops (&gt;! &lt;!) compiled into a state machine; on real threads you use blocking variants (&gt;!! &lt;!!).</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m06-sequences-laziness-transducers.html"><span class="dir">&larr; PREV</span>Module 06 &middot; Sequences, Laziness &amp; Transducers</a>
+      <a class="next" href="m08-java-interop.html"><span class="dir">NEXT &rarr;</span>Module 08 &middot; Java Interop for JVM Veterans</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

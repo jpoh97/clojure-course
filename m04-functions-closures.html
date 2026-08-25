@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 04 · Functions &amp; Closures — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m04">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 1 &middot; Foundations &rsaquo; <b>Module 04</b></nav>
+    <h1>Functions &amp; Closures</h1>
+    <p class="subtitle">Arity overloads, varargs, destructured parameters, closures and function composition &mdash; the vocabulary every other module builds on.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Write multi-arity functions with docstrings and varargs.</li>
+        <li>Destructure sequential and map arguments fluently.</li>
+        <li>Create closures and pass functions around as values.</li>
+        <li>Compose behavior with <code>partial</code>, <code>comp</code> and <code>juxt</code>.</li>
+      </ul>
+    </div>
+
+    <h2><code>defn</code> anatomy</h2>
+    <pre><code class="language-clojure">(defn greet
+  "Returns a greeting string.            ; optional docstring
+   Accepts an optional salutation."
+  ([name]                                ; arity 1 delegates...
+   (greet name "Hello"))
+  ([name salutation]                     ; ...to arity 2
+   (str salutation ", " name "!")))
+
+(greet "Ada")               ;=&gt; "Hello, Ada!"
+(greet "Ada" "Bonjour")     ;=&gt; "Bonjour, Ada!"
+(doc greet)                 ; prints the docstring you wrote</code></pre>
+    <p>The last expression's value is returned &mdash; there is no <code>return</code> keyword.
+    Multi-arity dispatches on argument count (Kotlin default parameters solve a similar problem differently).</p>
+
+    <h2>Variadic functions</h2>
+    <pre><code class="language-clojure">(defn summarize
+  "Summarizes any number of numbers."
+  [label &amp; xs]                    ; xs collects remaining args into a seq
+  {:label label
+   :count  (count xs)
+   :total  (reduce + xs)})
+
+(summarize "sales" 10 20 30)
+;=&gt; {:label "sales", :count 3, :total 60}
+
+(apply summarize "bulk" [1 2 3])  ; spread a collection as args
+;=&gt; {:label "bulk", :count 3, :total 6}</code></pre>
+
+    <h2>Anonymous functions</h2>
+    <pre><code class="language-clojure">;; full form - a first-class value like any other:
+(fn [x] (* x x))
+
+;; reader shorthand for short lambdas:
+#(* % x)          ; wrong on purpose? no - see closure below
+#(* % %)          ; % is arg 1, %1...%n beyond, %&amp; = all rest
+
+(map #(* % 2) [1 2 3])        ;=&gt; (2 4 6)
+(reduce #(+ %1 %2) 0 [1 2 3]) ;=&gt; 6
+
+;; rule of thumb: once nesting or multiple args appear,
+;; prefer (fn [...]) or top-level defn - readability wins.</code></pre>
+
+    <h2>Closures: functions that remember</h2>
+    <pre><code class="language-clojure">(defn adder [n]
+  (fn [x] (+ x n)))       ; inner fn captures n from its birth environment
+
+(def add-tax (adder 1.19))
+(def add-shipping (adder 5))
+
+(add-tax 100)      ;=&gt; 119
+(add-shipping 100) ;=&gt; 105
+
+;; factories replace whole design patterns:
+(defn make-counter []           ; stateful - Module 07 makes this thread-safe
+  (let [state (atom 0)]
+    (fn [] (swap! state inc) @state)))
+((make-counter)) ;=&gt; 1</code></pre>
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p>Lambdas in Java capture effectively-final variables; Kotlin closures can mutate captured vars.
+      A Clojure closure captures immutable bindings &mdash; so "remembering" is safe by construction.
+      Where Java needs <code>@FunctionalInterface</code>, any Clojure function is already a JVM object
+      implementing <code>IFn</code> (plus <code>Runnable</code>/<code>Callable</code>) &mdash;
+      which is why <code>(future (do-slow-work))</code> just works.</p>
+    </div>
+
+    <h2>Destructuring: parameter unpacking done right</h2>
+    <pre><code class="language-clojure">;; sequential destructuring
+(let [[first-second-and :as all] [10 20 30 40]]
+  [second all])
+;=&gt; [20 [10 20 30 40]]
+
+(let [[a b &amp; more] [1 2 3 4 5]]
+  {:head b :rest more})
+;=&gt; {:head 2, :rest (3 4 5)}
+
+;; map destructuring - the workhorse of API handlers:
+(defn handle-create [{:keys [email roles] :or {roles #{:user}} :as payload}]
+  {:status 201
+   :body   {:email email :roles roles}})
+
+(handle-create {:email "ada@x.io"})
+;=&gt; {:status 201, :body {:email "ada@x.io", :roles #{:user}}}
+
+;; nested:
+(defn city-of [{[street city] :address}]
+  city)
+(city-of {:address ["Main St" "London"]})   ;=&gt; "London"</code></pre>
+    <p>This is why Ring handlers take one map argument: the framework passes a request map and you destructure
+    exactly what you need. Compare Spring's reflective argument resolvers doing the same thing invisibly.</p>
+
+    <h2>Functions composing functions</h2>
+    <pre><code class="language-clojure">;; sort-by takes a comparator or keyfn:
+(sort-by :age [{:age 31} {:age 18} {:age 44}])
+;=&gt; ({:age 18} {:age 31} {:age 44})
+
+(partial + 10)                 ; waits for the rest of the arguments
+((partial + 10) 32)            ;=&gt; 42
+
+(comp clojure.string/upper-case clojure.string/trim)
+((comp clojure.string/upper-case clojure.string/trim) "  hi ")
+;=&gt; "HI"                       ; right-to-left pipeline
+
+(juxt :id :score)              ; returns a fn producing a vector of results
+((juxt :id :score) {:id 7 :score 99})
+;=&gt; [7 99]
+
+(complement empty?)            ;=&gt; a negated predicate
+(filter (complement nil?) [1 nil 2])   ;=&gt; (1 2)</code></pre>
+
+    <div class="box tip">
+      <div class="box-title">Named-argument calls, idiomatic style</div>
+      <pre><code class="language-clojure">(defn connect [{:keys [host port timeout] :or {port 8080 timeout 500}}]
+  (str "connecting to " host ":" port))
+
+(connect {:host "api.io"})</code></pre>
+      <p>Instead of positional booleans like <code>connect("api.io", true, false)</code>, Clojure APIs accept
+      one options map &mdash; self-documenting call sites with safe defaults via <code>:or</code>.</p>
+    </div>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Ring middleware is literally a function taking a handler and returning a new handler (Module 10);
+      Reitit route handlers, re-frame event handlers and test fixtures are all plain functions passed by value.
+      Master closures + destructuring and half of every Clojure library API becomes obvious.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Clamp.</strong> Write <code>(clamp lo hi x)</code> returning x bounded
+      into <code>[lo, hi]</code>. Use <code>max</code>/<code>min</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn clamp [lo hi x]
+  (max lo (min hi x)))
+
+(clamp 0 100 150)  ;=&gt; 100
+(clamp 0 100 -5)   ;=&gt; 0</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Average with defaults.</strong> Write
+      <code>(average numbers)</code> using <code>reduce</code> and <code>count</code>; make it return
+      <code>nil</code> for an empty input instead of dividing by zero (hint: <code>(when (seq numbers) ...)</code>).
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn average [numbers]
+  (when (seq numbers)
+    (/ (reduce + numbers) (count numbers))))
+
+(average [2 4 9])  ;=&gt; 5
+(average [])       ;=&gt; nil</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Options-map function.</strong> Write
+      <code>(format-date {:keys [day month year] :or {month "01"}})</code> producing
+      <code>"year-month-day"</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn format-date [{:keys [day month year] :or {month "01"}}]
+  (str year "-" month "-" day))
+
+(format-date {:year 2024 :day 31})
+;=&gt; "2024-01-31"</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Compose validation.</strong> Given predicates
+      <code>#(&gt; (count %) 2)</code> and <code>#(clojure.string/includes? % "@")</code>, build one predicate with
+      <code>every-pred</code> and filter a list of candidate emails.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def valid-email?
+  (every-pred #(&gt; (count %) 2)
+              #(clojure.string/includes? % "@")))
+
+(filter valid-email? ["a@x.io" "@" "bob@corp.com"])
+;=&gt; ("a@x.io" "bob@corp.com")
+;; every-pred / some-fn are ready-made combinators alongside comp/partial.</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Closure factory.</strong> Write <code>(multiplier table)</code>
+      returning a function that looks up rates in the given map and applies them:
+      <code>((multiplier {:eur 1.08}) 100 :eur)</code> &rarr; <code>108.0</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn multiplier [rates]
+  (fn [amount currency]
+    (* amount (get rates currency))))
+
+((multiplier {:eur 1.08 :gbp 1.27}) 100 :eur)
+;=&gt; 108.0</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 04</h2>
+      <form class="quiz" data-quiz="m04">
+        <fieldset class="q" data-answer="c">
+          <legend>1 &middot; In the anonymous function <code>#(+ %1 %2)</code>, what are <code>%1</code> and <code>%2</code>?</legend>
+          <label><input type="radio" name="m04q1" value="a"><span>Percentages of the result</span></label>
+          <label><input type="radio" name="m04q1" value="b"><span>Placeholders only allowed inside let</span></label>
+          <label><input type="radio" name="m04q1" value="c"><span>The first and second arguments passed to the function</span></label>
+          <div class="explain" hidden>In <code>#(...)</code> shorthand, <code>%</code>/<code>%1</code> is the first arg, <code>%2</code> the second, and <code>%&amp;</code> gathers the rest.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>2 &middot; How does a multi-arity function choose which body runs?</legend>
+          <label><input type="radio" name="m04q2" value="a"><span>By argument types at runtime</span></label>
+          <label><input type="radio" name="m04q2" value="b"><span>By number of arguments (arity)</span></label>
+          <label><input type="radio" name="m04q2" value="c"><span>Randomly, whichever was defined last</span></label>
+          <div class="explain" hidden>Clojure functions dispatch on arity. Type-based polymorphism exists separately via protocols/multimethods (Module 08).</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>3 &middot; What does <code>(defn f [{:keys [a b] :or {b 2}}] [a b])</code> return for <code>(f {:a 1})</code>?</legend>
+          <label><input type="radio" name="m04q3" value="a"><span><code>[1 2]</code></span></label>
+          <label><input type="radio" name="m04q3" value="b"><span><code>[1 nil]</code></span></label>
+          <label><input type="radio" name="m04q3" value="c"><span>An exception about missing key :b</span></label>
+          <div class="explain" hidden><code>:or</code> supplies defaults for absent keys, exactly like Kotlin's default parameter values.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>4 &middot; <code>((comp f g h) x)</code> is equivalent to&hellip;</legend>
+          <label><input type="radio" name="m04q4" value="a"><span><code>(f (g (h x)))</code></span></label>
+          <label><input type="radio" name="m04q4" value="b"><span><code>(h (g (f x)))</code></span></label>
+          <label><input type="radio" name="m04q4" value="c"><span>calling f, then g, then h on x in parallel</span></label>
+          <div class="explain" hidden>comp composes right-to-left: h runs first, its result feeds g, then f. If you want left-to-right pipelines, that is what threading macros do (Module 05).</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>5 &middot; Why does <code>(future (heavy-task))</code> work even though <code>future</code> expects a Runnable-like?</legend>
+          <label><input type="radio" name="m04q5" value="a"><span>Clojure wraps everything automatically with reflection</span></label>
+          <label><input type="radio" name="m04q5" value="b"><span>It doesn't - you must wrap in (fn [] ...)</span></label>
+          <label><input type="radio" name="m04q5" value="c"><span>Every Clojure function implements Runnable and Callable among its JVM interfaces</span></label>
+          <div class="explain" hidden>Clojure fns are objects implementing AFn/IFn plus Runnable and Callable, so they plug straight into executors, futures and Java APIs expecting SAM types.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m03-collections-immutability.html"><span class="dir">&larr; PREV</span>Module 03 &middot; Collections &amp; Immutability</a>
+      <a class="next" href="m05-control-flow-threading.html"><span class="dir">NEXT &rarr;</span>Module 05 &middot; Control Flow &amp; Threading Macros</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

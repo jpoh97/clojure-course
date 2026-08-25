@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 13 · Testing &amp; Capstone Project — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m13">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 3 &middot; Real Applications &rsaquo; <b>Module 13</b></nav>
+    <h1>Testing &amp; Capstone Project</h1>
+    <p class="subtitle">Tests are the safety net that makes a dynamic language feel safe &mdash; then you prove everything by shipping LinkVault.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Test units and HTTP handlers with <code>clojure.test</code>.</li>
+        <li>Generate edge cases with <code>test.check</code> property-based tests.</li>
+        <li>Add linting/formatting/CI so refactors stay fearless.</li>
+        <li>Build the full-stack capstone using every module.</li>
+      </ul>
+    </div>
+
+    <h2>clojure.test essentials</h2>
+    <pre><code class="language-clojure">(ns shop.domain-test
+  (:require [clojure.test :refer [deftest is testing are]]
+            [shop.domain :as d]))
+
+(deftest discount-rules
+  (testing "premium members get 10% off orders over 100"
+    (is (= 90.0 (d/discount {:tier :premium :total 100}))))
+  (testing "everyone else pays full price"
+    (is (= 100 (d/discount {:tier :free :total 100})))))
+
+;; table-style assertions with `are`:
+(deftest grades
+  (are [score expected] (= expected (d/grade score))
+    95 :A   80 :B   61 :C   10 :F))</code></pre>
+    <p>Because functions are values and state is explicit, there is rarely anything to mock:
+    construct inputs as maps, assert outputs as maps. Fixtures cover setup:</p>
+    <pre><code class="language-clojure">(use-fixtures :each                     ; like @BeforeEach
+  (fn [t] (reset! db/test-state {}) (t)))
+
+(use-fixtures :once                     ; like @BeforeAll - start container once
+  (fn [t] (db/start!) (t) (db/stop!)))</code></pre>
+
+    <h2>HTTP integration tests without booting Spring</h2>
+    <pre><code class="language-clojure">(ns shop.api-test
+  (:require [clojure.test :refer [deftest is]]
+            [ring.mock.request :as mock]
+            [shop.api :as api]))
+
+(deftest health-endpoint
+  (let [{:keys [status body]} (api/app (mock/request :get "/api/health"))]
+    (is (= 200 status))
+    (is (= {:status "up"} body))))
+
+(deftest create-validates-body
+  (let [req      (-> (mock/request :post "/api/items")
+                     (mock/json-body {:name "" :price "free"}))
+        response (api/app req)]
+    (is (= 400 (:status response)))))     ; Malli rejection - no server started</code></pre>
+
+    <h2>Property-based testing with test.check</h2>
+    <p>Like jqwik/Kotest properties: describe an invariant for <em>all</em> generated inputs;
+    when it fails, the framework shrinks toward the minimal counterexample.</p>
+    <pre><code class="language-clojure">(require '[clojure.test.check.properties :as prop]
+         '[clojure.test.check.clojure-test :refer [defspec]]
+         '[clojure.test.check.generators :as gen])
+
+;; serialization must round-trip for ANY payload:
+(defspec json-roundtrip 200
+  (prop/for-all [m (gen/map gen/keyword
+                            (gen/one-of [gen/int gen/string gen/boolean]))]
+    (= m (cheshire.core/parse-string
+           (cheshire.core/generate-string m) true))))
+
+;; classic invariant:
+(defspec reverse-twice 100
+  (prop/for-all [v (gen/vector gen/small-integer)]
+    (= v (vec (reverse (reverse v))))))</code></pre>
+    <div class="box tip">
+      <div class="box-title">Where properties pay off most</div>
+      <p>Parsers, serializers, pagination math, money rounding, permission logic &mdash; anywhere examples lie.
+      A generator found a real bug in my own code once because an empty-string header case was never in any
+      hand-written example.</p>
+    </div>
+
+    <h2>Database tests</h2>
+    <ul>
+      <li><strong>Rollback pattern:</strong> open a connection, begin tx per test, roll back at the end &mdash; zero cleanup.</li>
+      <li><strong>Dedicated schema + truncate fixture:</strong> simple and parallel-friendly.</li>
+      <li><strong>Testcontainers via interop</strong> (your Java skills again): spin a real Postgres per CI run.</li>
+    </ul>
+    <pre><code class="language-clojure">(import '[org.testcontainers.containers PostgreSQLContainer])
+
+(def pg (doto (PostgreSQLContainer. "postgres:16")
+          (.start)))
+(def ds (jdbc/get-datasource {:jdbcUrl (.getJdbcUrl pg)
+                              :username (.getUsername pg)
+                              :password (.getPassword pg)}))</code></pre>
+
+    <h2>Static analysis &amp; CI</h2>
+    <table>
+      <tr><th>Tool</th><th>Role</th></tr>
+      <tr><td><strong>clj-kondo</strong></td><td>The linter everyone runs &mdash; unused vars, wrong arity, misplaced docstrings, even across macros.</td></tr>
+      <tr><td>eastwood</td><td>Deeper static checks.</td></tr>
+      <tr><td>cljfmt / cljstyle</td><td>Automatic formatting (like ktlint).</td></tr>
+      <tr><td>cloverage</td><td>Coverage reporting.</td></tr>
+    </table>
+    <pre><code class="language-yaml"># .github/workflows/ci.yml
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - uses: DeLaGuardo/setup-clojure@master
+        with: { cli: latest, clj-kondo: latest }
+      - run: clj-kondo --lint src test
+      - run: clojure -M:test</code></pre>
+
+    <h2>The REPL-driven loop, one last look</h2>
+    <ol>
+      <li>Write a failing assertion right in a comment block / REPL.</li>
+      <li>Implement; evaluate the function into the running process (<code>Alt+Enter</code>).</li>
+      <li><code>(refresh)</code> changed namespaces (or <code>(reset)</code> with Integrant).</li>
+      <li>Rerun tests instantly &mdash; no rebuild, redeploy or context boot.</li>
+    </ol>
+
+    <h2>Capstone: build LinkVault</h2>
+    <p>A bookmark manager &mdash; small enough to finish, wide enough to exercise all thirteen modules.</p>
+    <table>
+      <tr><th>Feature</th><th>Modules exercised</th></tr>
+      <tr><td>REST API: register/login (bcrypt via <code>buddy-hashers</code>), bookmarks CRUD, tag search</td><td>01&ndash;05, 10</td></tr>
+      <tr><td>Malli schemas shared between backend validation and frontend forms</td><td>02, 03, 10, 12</td></tr>
+      <tr><td>Postgres persistence, migrations, pooled datasource, transactions on import/export</td><td>11</td></tr>
+      <tr><td>Auth middleware issuing signed tokens</td><td>07, 08, 10</td></tr>
+      <tr><td>Reagent dashboard: list/filter/add bookmarks, loading states</td><td>12</td></tr>
+      <tr><td>Unit + ring-mock + property (roundtrip import/export) tests, clj-kondo clean, CI green</td><td>13</td></tr>
+    </table>
+    <p><strong>Suggested layout:</strong> monorepo with <code>server/</code> (deps.edn project) and
+    <code>ui/</code> (shadow-cljs), sharing a <code>shared/schemas.cljc</code> file readable by both platforms
+    &mdash; the <code>.cljc</code> reader-conditionals trick is Clojure's answer to sharing types across services.</p>
+    <div class="box tip">
+      <div class="box-title">Acceptance criteria</div>
+      <ul>
+        <li><code>curl</code>-able API returning JSON errors consistently (wrap-errors middleware)</li>
+        <li>Unauthenticated requests get 401; users only see their own bookmarks</li>
+        <li>Import/export of a JSON archive survives a property-based roundtrip test</li>
+        <li>UI works against a locally running server with hot reload</li>
+        <li>One-command startup: docker compose with Postgres + app</li>
+      </ul>
+    </div>
+
+    <h2>Where to go next</h2>
+    <ul>
+      <li><strong>Books:</strong> <em>Getting Clojure</em> (Russ Olsen), <em>Programming Clojure</em> (Higginbotham/Stuart), <em>Elements of Clojure</em> (Norman Richards) for design taste.</li>
+      <li><strong>Practice:</strong> Exercism track, 4Clojure katas, Advent of Code in Clojure.</li>
+      <li><strong>Community:</strong> Clojurians Slack (search before asking!), ClojureVerse, conference talks (Conj, Heart of Clojure recordings are free).</li>
+      <li><strong>Read production code:</strong> Metabase's repo is a masterclass in structuring large CLJC apps.</li>
+    </ul>
+
+    <div class="box usecase">
+      <div class="box-title">Why teams invest in this workflow</div>
+      <p>Nubank publicly attributes its fast iteration to exactly this stack: REPL-first development,
+      property-based tests over financial rules, and lint-gated CI. The dynamic language is not a liability
+      because correctness is engineered through data-oriented design plus these tools.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>First deftest.</strong> Write tests for Module 05's fizzbuzz
+      covering multiples of 3, 5, 15 and 7 using <code>are</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(deftest fizzbuzz-spec
+  (are [n expected] (= expected (fb/fizzbuzz n))
+    9  :fizz
+    10 :buzz
+    30 :fizzbuzz
+    7  7))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Handler suite.</strong> Using ring-mock, test your Task-3 items
+      endpoint from Module 10 for both found and missing ids.
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Property hunt.</strong> Write a defspec asserting your
+      <code>search-users</code> HoneySQL function never returns emails not matching the requested pattern
+      (generate strings with <code>gen/string-alphanumeric</code>).
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Kondo pass.</strong> Run <code>clj-kondo --lint src test</code> on
+      your capstone repo and fix everything until exit code is 0.
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Ship it.</strong> Complete LinkVault, write a README with curl
+      examples, and deploy the jar somewhere (Fly.io/Railway have free tiers). Congratulations &mdash;
+      you're a Clojure developer now.
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 13</h2>
+      <form class="quiz" data-quiz="m13">
+        <fieldset class="q" data-answer="b">
+          <legend>1 &middot; Inside <code>clojure.test</code>, which macro performs an assertion?</legend>
+          <label><input type="radio" name="m13q1" value="a"><span>check</span></label>
+          <label><input type="radio" name="m13q1" value="b"><span>is</span></label>
+          <label><input type="radio" name="m13q1" value="c"><span>assert-equals</span></label>
+          <div class="explain" hidden>(is (= expected actual)) is the workhorse; (are ...) templates many similar assertions; thrown? tests exceptions.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>2 &middot; What do <code>use-fixtures</code> provide?</legend>
+          <label><input type="radio" name="m13q2" value="a"><span>Compile-time code generation</span></label>
+          <label><input type="radio" name="m13q2" value="b"><span>Nothing - they are documentation only</span></label>
+          <label><input type="radio" name="m13q2" value="c"><span>Setup/teardown wrapping each test (:each) or the whole namespace (:once)</span></label>
+          <div class="explain" hidden>Equivalent to JUnit's @BeforeEach/@BeforeAll, expressed as functions receiving the test continuation.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>3 &middot; What makes test.check special?</legend>
+          <label><input type="radio" name="m13q3" value="a"><span>It generates random cases against stated invariants and shrinks failures to minimal examples</span></label>
+          <label><input type="radio" name="m13q3" value="b"><span>It measures code coverage while unit tests run</span></label>
+          <label><input type="radio" name="m13q3" value="c"><span>It mocks databases automatically</span></label>
+          <div class="explain" hidden>Property-based testing with shrinking - same idea as jqwik/Kotest props, native to the ecosystem.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>4 &middot; Why can Ring handlers be tested without starting Jetty?</legend>
+          <label><input type="radio" name="m13q4" value="a"><span>Jetty embeds itself invisibly during tests</span></label>
+          <label><input type="radio" name="m13q4" value="b"><span>Handlers require a live network stack</span></label>
+          <label><input type="radio" name="m13q4" value="c"><span>They cannot - you always need curl</span></label>
+          <label><input type="radio" name="m13q4" value="d"><span>A handler is just a map-in/map-out function; mock/request builds the input map directly</span></label>
+          <div class="explain" hidden>The transport layer is optional at test time - this is the payoff of the Ring design from Module 10.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>5 &middot; Which tool is the de-facto standard linter for Clojure projects?</legend>
+          <label><input type="radio" name="m13q5" value="a"><span>ESLint</span></label>
+          <label><input type="radio" name="m13q5" value="b"><span>clj-kondo</span></label>
+          <label><input type="radio" name="m13q5" value="c"><span>Checkstyle</span></label>
+          <div class="explain" hidden>clj-kondo reads source without executing it, catching arity errors, unused bindings and more - including inside your own macros.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m12-frontend-cljs-reagent.html"><span class="dir">&larr; PREV</span>Module 12 &middot; Frontend: ClojureScript + Reagent</a>
+      <a class="next" href="index.html"><span class="dir">FINISH &rarr;</span>Back to overview</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

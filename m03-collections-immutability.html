@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 03 · Collections &amp; Immutability — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m03">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 1 &middot; Foundations &rsaquo; <b>Module 03</b></nav>
+    <h1>Collections &amp; Immutability</h1>
+    <p class="subtitle">Vectors, lists, maps and sets with literal syntax everywhere &mdash; plus the persistent data structures that make immutability practical.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Master the four core collection types and their literals.</li>
+        <li>Use the essential map/vector operations from memory.</li>
+        <li>Understand structural sharing &mdash; why "copies" are cheap.</li>
+        <li>Exploit value equality and invokable keywords/maps.</li>
+      </ul>
+    </div>
+
+    <h2>The four core collections</h2>
+    <pre><code class="language-clojure">[1 2 3]            ; vector - indexed, ordered. THE default collection
+'(1 2 3)           ; list   - linked, ordered. Mostly for code/forms
+{:name "Ada" :age 36}          ; map   - key -&gt; value associations
+#{:admin :member}               ; set   - unique values</code></pre>
+    <table>
+      <tr><th>Type</th><th>Literal</th><th>Add with</th><th>Java-ish equivalent</th></tr>
+      <tr><td>Vector</td><td><code>[1 2 3]</code></td><td><code>(conj v x)</code> at the end</td><td><code>List.of(...)</code> + random access</td></tr>
+      <tr><td>List</td><td><code>'(1 2 3)</code></td><td><code>(conj l x)</code> at the front</td><td><code>LinkedList</code></td></tr>
+      <tr><td>Map</td><td><code>{:a 1}</code></td><td><code>(assoc m k v)</code></td><td><code>Map.of(...)</code></td></tr>
+      <tr><td>Set</td><td><code>#{1 2}</code></td><td><code>(conj s x)</code></td><td><code>Set.of(...)</code></td></tr>
+    </table>
+    <div class="box tip">
+      <div class="box-title">Idiom</div>
+      <p>When you would reach for an ArrayList or a POJO/DTO in Java, you use a vector or map here.
+      Lists are mainly how <em>code itself</em> is represented &mdash; that's why quoting (<code>'</code>)
+      suppresses evaluation of a literal list.</p>
+    </div>
+
+    <h2>Vectors: your ArrayList replacement</h2>
+    <pre><code class="language-clojure">(def langs ["clojure" "kotlin" "java"])
+
+(nth langs 0)        ;=&gt; "clojure"
+(langs 1)            ;=&gt; "kotlin"     vectors are invokable!
+(get langs 9 :none)  ;=&gt; :none        safe access with default
+(conj langs "scala") ;=&gt; ["clojure" "kotlin" "java" "scala"]  NEW vector
+langs                ;=&gt; ["clojure" "kotlin" "java"]          original intact
+(count langs)        ;=&gt; 3
+(vec (range 3))      ;=&gt; [0 1 2]     build from anything seqable</code></pre>
+
+    <h2>Maps: your DTO/POJO/JSONObject replacement</h2>
+    <pre><code class="language-clojure">(def user {:name "Ada" :roles #{:admin} :address {:city "London"}})
+
+(get user :name)                 ;=&gt; "Ada"
+(:name user)                     ;=&gt; "Ada"   keywords are functions!
+(user :name)                     ;=&gt; "Ada"   maps are functions too!
+(get-in user [:address :city])   ;=&gt; "London"
+(get-in user [:address :zip] "-") ;=&gt; "-"    nested lookup w/ default
+
+(assoc user :premium true)       ; add / overwrite key
+(dissoc user :roles)             ; remove key
+(update user :name clojure.string/upper-case)  ; transform a value
+(assoc-in user [:address :zip] "E1")
+(update-in user [:roles] conj :editor)
+
+(select-keys user [:name :age])
+(keys user)  (vals user)
+(contains? user :name)           ;=&gt; true
+(count user)                     ;=&gt; 3
+
+(def defaults {:retries 3 :timeout 100})
+(merge defaults {:timeout 500})  ;=&gt; {:retries 3, :timeout 500}
+(merge-with + {:a 1} {:a 2})     ;=&gt; {:a 3}</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p>A Clojure map plays the roles of DTO + Builder + Bean Validation target all at once.
+      Where Kotlin gives you <code>data class User(copy = ...)</code>, Clojure gives you
+      <code>assoc</code>/<code>update</code> on plain maps. There is no Lombok because there are no classes to
+      write &mdash; and when you truly need a typed thing, Module 08 introduces <code>defrecord</code>.</p>
+    </div>
+
+    <h2>Sets and clojure.set</h2>
+    <pre><code class="language-clojure">(def roles #{:admin :editor})
+(contains? roles :admin)     ;=&gt; true   ; O(1)-ish membership
+(conj roles :viewer)
+(disj roles :admin)
+(require '[clojure.set :as set])
+(set/union #{1 2} #{2 3})            ;=&gt; #{1 2 3}
+(set/intersection #{1 2} #{2 3})     ;=&gt; #{2}
+(set/difference  #{1 2 3} #{2})      ;=&gt; #{1 3}
+
+(distinct [1 1 2 3 3])       ;=&gt; (1 2 3)  dedupe any sequence
+(frequencies "banana")       ; char counts - surprisingly useful</code></pre>
+
+    <h2>Immutability that doesn't cost a fortune</h2>
+    <p>All four structures are <strong>persistent</strong>: every "modification" returns a new value while
+    internally sharing structure with the old one. Adding to a billion-element vector copies O(log<sub>32</sub> n)
+    nodes &mdash; effectively a handful of pointers:</p>
+    <pre><code class="language-clojure">(def xs (vec (range 1000000000)))   ; a billion ints... instantly
+(def ys (conj xs :end))             ; "copies" xs in microseconds
+(nth ys 999999999)                  ;=&gt; 999999999  still readable, fast</code></pre>
+    <p>This is what lets Clojure treat state as <em>values over time</em>: pass a map anywhere, store it,
+    share it across threads &mdash; nobody can corrupt it behind your back. Compare the defensive copying,
+    unmodifiable wrappers and concurrent-modification exceptions you manage in Java.</p>
+
+    <h3>Value equality unlocks clean modeling</h3>
+    <pre><code class="language-clojure">(= {:a 1} {:a 1})                    ;=&gt; true regardless of construction path
+(= #{"x"} (set ["x" "x"]))           ;=&gt; true
+
+;; maps as keys - painless composite keys:
+(def price-table {{:from :usd :to :eur} 0.92
+                  {:from :eur :to :gbp} 0.85})
+(price-table {:from :usd :to :eur})  ;=&gt; 0.92</code></pre>
+
+    <div class="box warn">
+      <div class="box-title">Performance note</div>
+      <p>Small maps (up to 8 entries) are array-backed <code>array-maps</code> with linear scan &mdash; faster than
+      hashing. Large maps become hash-array-mapped tries automatically. You rarely choose; the runtime does.
+      For sorted needs there are <code>sorted-map</code> / <code>sorted-set-by</code>.</p>
+    </div>
+
+    <h2>EDN: data as a file format</h2>
+    <p>The literal syntax you just learned doubles as a serialization format &mdash;
+    <strong>E</strong>xtensible <strong>D</strong>ata <strong>N</strong>otation. Config files, route tables and
+    system definitions ship as EDN; <code>#inst "2024-01-01"</code> style tagged literals extend it.
+    Think JSON with keywords, sets, richer types and no ambiguity about nil vs missing.</p>
+    <pre><code class="language-edn">{:port 3000
+ :db   {:host "localhost" :port 5432 :dbname "shop"}
+ :features #{:search :export}}</code></pre>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Every Ring request/response, Reitit route match, Malli schema and HoneySQL query in Modules 10&ndash;11 is
+      exactly these data structures. Nubank publicly credits immutable data + explicit transformations as a pillar
+      of their ability to refactor financial services safely.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>User profile surgery.</strong> Given
+      <code>(def u {:email "ada@x.io" :roles #{:user}})</code>: change the email, add role <code>:admin</code>,
+      and produce <code>{"ada@x.io" #{:user :admin}}</code>-style output keyed by email.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(-> u
+    (assoc :email "ada@new.io")
+    (update :roles conj :admin))
+;=&gt; {:email "ada@new.io", :roles #{:user :admin}}
+
+{(u :email) (u :roles)}
+;=&gt; {"ada@x.io" #{:user}}</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Safe deep lookup.</strong> From
+      <code>(def order {:customer {:address {:city "Berlin"}}})</code> fetch <code>:city</code>; then fetch
+      <code>:zip</code> returning <code>"n/a"</code> when absent.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(get-in order [:customer :address :city])        ;=&gt; "Berlin"
+(get-in order [:customer :address :zip] "n/a")   ;=&gt; "n/a"</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Merge configs.</strong> Combine
+      <code>{:db {:port 5432}}</code> with <code>{:db {:host "db.local"}}</code> so both keys survive
+      (<code>merge</code> alone replaces the inner map!).
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(merge-with merge {:db {:port 5432}} {:db {:host "db.local"}})
+;=&gt; {:db {:port 5432, :host "db.local"}}</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Cart math preview.</strong> Given items
+      <code>[{:price 10} {:price 25} {:price 5}]</code>, compute the total using <code>map</code> and
+      <code>reduce</code> (both get full treatment soon &mdash; copy-paste courage).
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(reduce + (map :price [{:price 10} {:price 25} {:price 5}]))
+;=&gt; 40</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Prove cheap copies.</strong> Create a 1M-element vector, time
+      <code>conj</code> onto it with <code>(time ...)</code>, then confirm the original kept its old count.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def big (vec (range 1000000)))
+(time (def big2 (conj big :x)))
+;"Elapsed time: ~0.05 msecs"
+[(count big) (count big2)]   ;=&gt; [1000000 1000001]</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 03</h2>
+      <form class="quiz" data-quiz="m03">
+        <fieldset class="q" data-answer="b">
+          <legend>1 &middot; Which collection has no literal syntax?</legend>
+          <label><input type="radio" name="m03q1" value="a"><span>Vectors</span></label>
+          <label><input type="radio" name="m03q1" value="b"><span>Java arrays</span></label>
+          <label><input type="radio" name="m03q1" value="c"><span>Sets</span></label>
+          <label><input type="radio" name="m03q1" value="d"><span>Maps</span></label>
+          <div class="explain" hidden>Vectors <code>[]</code>, lists <code>()</code>, maps <code>{}</code> and sets <code>#{}</code> all have literals. Arrays are low-level JVM interop territory (Module 08).</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>2 &middot; What does <code>(conj [1 2] 3)</code> return?</legend>
+          <label><input type="radio" name="m03q2" value="a"><span><code>(3 1 2)</code></span></label>
+          <label><input type="radio" name="m03q2" value="b"><span>Nothing - it mutates the vector</span></label>
+          <label><input type="radio" name="m03q2" value="c"><span><code>[1 2 3]</code> - a new vector with 3 at the end</span></label>
+          <label><input type="radio" name="m03q2" value="d"><span>An exception</span></label>
+          <div class="explain" hidden>conj adds at the natural end of a vector and returns a new value. (On a list, the "natural end" is the front.)</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>3 &middot; Why are persistent collections "cheap to copy"?</legend>
+          <label><input type="radio" name="m03q3" value="a"><span>They store everything twice</span></label>
+          <label><input type="radio" name="m03q3" value="b"><span>The GC removes old versions instantly</span></label>
+          <label><input type="radio" name="m03q3" value="c"><span>They are actually mutable under the hood</span></label>
+          <label><input type="radio" name="m03q3" value="d"><span>New versions share most internal structure with the old one</span></label>
+          <div class="explain" hidden>Structural sharing means only O(log32 n) new nodes are allocated per update; readers of the old version see an unchanged world.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>4 &middot; What is <code>(:email {:email "a@b.c"})</code>?</legend>
+          <label><input type="radio" name="m03q4" value="a"><span><code>"a@b.c"</code> - keywords act as lookup functions</span></label>
+          <label><input type="radio" name="m03q4" value="b"><span>A syntax error</span></label>
+          <label><input type="radio" name="m03q4" value="c"><span><code>:email</code></span></label>
+          <div class="explain" hidden>Keywords, symbols, maps, sets and vectors are all invokable - a small polymorphism superpower of Clojure syntax.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>5 &middot; What is <code>(= {:a 1 :b 2} (assoc {:a 1} :b 2))</code>?</legend>
+          <label><input type="radio" name="m03q5" value="a"><span>false - different objects</span></label>
+          <label><input type="radio" name="m03q5" value="b"><span>true - equality compares values, not identity</span></label>
+          <label><input type="radio" name="m03q5" value="c"><span>false - insertion order matters</span></label>
+          <div class="explain" hidden>Maps compare by their entries. This value-equality is why maps work as map keys and make tests read like truth tables.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m02-syntax-essentials.html"><span class="dir">&larr; PREV</span>Module 02 &middot; Syntax Essentials</a>
+      <a class="next" href="m04-functions-closures.html"><span class="dir">NEXT &rarr;</span>Module 04 &middot; Functions &amp; Closures</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

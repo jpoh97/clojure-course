@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 10 · Web Backends: Ring + Reitit — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m10">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 3 &middot; Real Applications &rsaquo; <b>Module 10</b></nav>
+    <h1>Web Backends: Ring + Reitit</h1>
+    <p class="subtitle">The Clojure equivalent of Spring MVC &mdash; except handlers are plain maps-in/maps-out functions you can test in the REPL.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Understand the Ring spec: request/response as data, middleware as functions.</li>
+        <li>Build a real JSON API with routing, validation and error handling.</li>
+        <li>Test handlers directly in the REPL without booting a server.</li>
+        <li>Package and deploy like any JVM service.</li>
+      </ul>
+    </div>
+
+    <h2>The Ring model: HTTP as data</h2>
+    <p>Ring defines three things: <strong>handlers</strong> (maps in, maps out),
+    <strong>middleware</strong> (functions that decorate handlers) and <strong>adapters</strong>
+    (Jetty/Undertow/http-kit glue to sockets). That's the whole framework:</p>
+    <pre><code class="language-clojure">;; A handler receives a request MAP and returns a response MAP.
+(defn handler [request]
+  {:status 200
+   :headers {"Content-Type" "text/plain"}
+   :body "hello"})
+
+;; What's inside a request map? Everything the server saw:
+{:request-method  :get
+ :uri             "/api/users/42"
+ :query-string    "active=true"
+ :headers         {"accept" "application/json"}
+ :server-port     80
+ :body            #object[...]           ; raw InputStream
+ ;; added by middleware later:
+ :path-params     {:id "42"}
+ :params          {"active" "true"}
+ :body-params     {:email "ada@x.io"}}</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Spring</div>
+      <table>
+        <tr><th>Spring</th><th>Clojure</th></tr>
+        <tr><td><code>@RestController</code> + <code>@RequestMapping</code></td><td>plain fn + Reitit route data</td></tr>
+        <tr><td><code>@PathVariable</code>/<code>@RequestBody</code></td><td>destructure <code>:path-params</code>/<code>:body-params</code></td></tr>
+        <tr><td>Servlet filters / interceptors</td><td>Ring middleware (higher-order fns)</td></tr>
+        <tr><td>HttpMessageConverters (Jackson)</td><td>Muuntaja content negotiation</td></tr>
+        <tr><td>Bean Validation (<code>@Valid</code>)</td><td>Malli schemas on routes</td></tr>
+        <tr><td><code>@ControllerAdvice</code> exception mapper</td><td>a <code>wrap-errors</code> middleware</td></tr>
+        <tr><td><code>application.yml</code></td><td>an EDN map / environment variables</td></tr>
+      </table>
+    </div>
+
+    <h2>Dependencies and the first server</h2>
+    <pre><code class="language-clojure">{:paths ["src"]
+ :deps {org.clojure/clojure        {:mvn/version "1.12.1"}
+        ring/ring-core             {:mvn/version "1.13.0"}
+        ring/ring-jetty-adapter    {:mvn/version "1.13.0"}
+        metosin/reitit             {:mvn/version "0.7.2"}
+        metosin/muuntaja           {:mvn/version "0.6.8"}
+        metosin/malli              {:mvn/version "0.16.4"}}}</code></pre>
+
+    <h2>A real JSON API</h2>
+    <pre><code class="language-clojure">(ns shop.api
+  (:require [ring.adapter.jetty :as jetty]
+            [reitit.ring :as ring]
+            [reitit.ring.middleware.muuntaja :as muuntaja-mw]
+            [reitit.ring.middleware.parameters :as parameters]
+            [reitit.ring.coercion :as coercion]
+            [muuntaja.core :as m]))
+
+;; ---- handlers: pure functions --------------------------------------
+(defn health [_]
+  {:status 200 :body {:status "up"}})
+
+(defn hello [{:keys [path-params]}]
+  {:status 200 :body {:message (str "Hello, " (:name path-params))}})
+
+(defn list-items [{:keys [query-params]}]          ; ?q=...&limit=...
+  (let [q     (get query-params :q)
+        limit (parse-long (get query-params :limit "20"))]
+    {:status 200 :body {:query q :limit limit :items []}}))
+
+(defn create-item [{:keys [body-params]}]
+  {:status 201
+   :body (assoc body-params :id (str (random-uuid)))})
+
+;; ---- routing: data, not annotations ---------------------------------
+(def app
+  (ring/ring-handler
+    (ring/router
+      [["/api"
+        {:middleware [parameters/parameters-middleware       ; parse query/form
+                      muuntaja-mw/format-middleware          ; negotiate JSON/EDN
+                      coercion/coerce-request-middleware     ; validate input
+                      coercion/coerce-response-middleware]}  ; validate output
+        ["/health"      {:get health}]
+        ["/hello/:name" {:get hello
+                         :parameters {:path {:name string?}}}]
+        ["/items"
+         [""     {:get  list-items
+                  :post {:handler    create-item
+                         :parameters {:body [:map
+                                             [:name  string?]
+                                             [:price number?]]}}}]]]]
+
+      {:data {:muuntaja m/instance}})
+    (ring/create-default-handler)))                ; 404/405/406 defaults
+
+(defn -main []
+  (jetty/run-jetty app {:port 3000 :join? false}))</code></pre>
+
+    <h2>Testing handlers in the REPL - no container, no mock MVC</h2>
+    <pre><code class="language-clojure">user=&gt; (require '[shop.api :as api])
+user=&gt; (api/app {:request-method :get :uri "/api/hello/ada"})
+;=&gt; {:status 200, :body {:message "Hello, ada"}}
+
+user=&gt; (api/app {:request-method :post
+                 :uri "/api/items"
+                 :body-params {:name "widget" :price 9.99}})
+;=&gt; {:status 201, :body {:name "widget", :price 9.99, :id "..."}}
+
+user=&gt; (api/app {:request-method :post
+                 :uri "/api/items"
+                 :body-params {:name "" :price "free"}})
+;=&gt; 400 with a Malli explanation of exactly which field failed</code></pre>
+    <div class="box tip">
+      <div class="box-title">Why this matters</div>
+      <p>This is the payoff of everything-as-data: your entire API is testable as ordinary function calls.
+      Integration tests become <code>(is (= 200 (:status (app req))))</code> &mdash; milliseconds instead of
+      <code>@SpringBootTest</code> context boots.</p>
+    </div>
+
+    <h2>Middleware: filters as higher-order functions</h2>
+    <pre><code class="language-clojure">;; a middleware takes a handler, returns a decorated handler:
+(defn wrap-timing [handler]
+  (fn [req]
+    (let [t0  (System/nanoTime)
+          res (handler req)]
+      (println (:request-method req) (:uri req)
+               (-&gt; (- (System/nanoTime) t0) (/ 1e6) long) "ms")
+      res)))
+
+(defn wrap-errors [handler]
+  (fn [req]
+    (try
+      (handler req)
+      (catch Exception e
+        (let [{:keys [code]} (ex-data e)]
+          {:status (or code 500)
+           :body   {:error (.getMessage e)}})))))
+
+(defn wrap-auth [handler]
+  (fn [req]
+    (if (= "Bearer secret-token" (get-in req [:headers "authorization"]))
+      (handler req)
+      {:status 401 :body {:error "unauthorized"}})))
+
+(def app (wrap-timing (wrap-errors app)))   ; compose explicitly</code></pre>
+    <p>Order composes visibly &mdash; no annotation scanning surprises. Community middlewares cover CORS,
+    cookies, sessions, multipart, static resources and JWT verification (<code>buddy-auth</code>,
+    <code>ring-jwt</code>).</p>
+
+    <h2>Structuring a growing service</h2>
+    <pre><code class="language-text">src/
+  shop/
+    api.clj          ; routes + handlers only (HTTP concerns)
+    domain.clj       ; pure business rules - no ring imports!
+    db.clj           ; Postgres access (Module 11)
+    system.clj       ; wiring: datasource + app + server start</code></pre>
+    <pre><code class="language-clojure">;; Dependency injection without a container: pass dependencies as args.
+(defn make-handler [ds]                       ; ds = pooled datasource
+  (ring/ring-handler
+    (ring/router [["/api/orders" {:get #(list-orders % ds)}]])))
+
+;; For larger systems, Integrant turns an EDN config into running parts:
+;; {:db/datasource {...cfg...}
+;;  :app/handler {:ds #ig/ref :db/datasource}}
+;; (ig/init cfg) builds everything in dependency order - think
+;; "Spring context, but the graph is data you can read".</code></pre>
+
+    <h2>Deploying</h2>
+    <pre><code class="language-bash"># fat jar, same story as Spring Boot:
+clj -T:build uber          # tools.build, or: lein uberjar
+java -jar target/shop-1.0.0.jar</code></pre>
+    <pre><code class="language-text">FROM eclipse-temurin:21-jre
+COPY target/shop.jar /app.jar
+EXPOSE 3000
+ENTRYPOINT ["java", "-jar", "/app.jar"]</code></pre>
+    <table>
+      <tr><th>If you want&hellip;</th><th>Pick</th></tr>
+      <tr><td>Batteries-included full-stack template (like Spring Initializr)</td><td>Luminus or Kit</td></tr>
+      <tr><td>High-throughput interceptor-based services</td><td>Pedestal</td></tr>
+      <tr><td>Async/non-blocking IO on Netty</td><td>Aleph (or http-kit)</td></tr>
+      <tr><td>Tiny footprint, fast startup</td><td>Undertow adapter, GraalVM native-image</td></tr>
+    </table>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Nubank runs hundreds of production Clojure services on precisely this stack family (Ring-compatible,
+      Datomic/Postgres storage). CircleCI built its original platform with these libraries. For CRUD-plus-rules
+      APIs, a working validated endpoint is ~30 lines total &mdash; and every line is inspectable data.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Echo endpoint.</strong> Add <code>POST /api/echo</code> that
+      validates a body of <code>[:map [:message string?]]</code> and returns the message uppercased with status 201.
+      Test it in the REPL before starting Jetty.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn echo [{:keys [body-params]}]
+  {:status 201
+   :body   {:echo (clojure.string/upper-case (:message body-params))}})
+
+;; route:
+["/echo" {:post {:handler    echo
+                 :parameters {:body [:map [:message string?]]}}}]</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Request-ID middleware.</strong> Write <code>wrap-request-id</code>
+      that puts a UUID into the request under <code>:req-id</code>, echoes it back in the response header
+      <code>X-Request-Id</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn wrap-request-id [handler]
+  (fn [req]
+    (let [id (str (random-uuid))
+          res (handler (assoc req :req-id id))]
+      (assoc-in res [:headers "X-Request-Id"] id))))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>In-memory store.</strong> Hold items in an atom (Module 07);
+      implement GET by id returning 200 or 404.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defonce db (atom {}))
+
+(defn get-item [{{:keys [id]} :path-params}]
+  (if-some [item (get @db id)]
+    {:status 200 :body item}
+    {:status 404 :body {:error "not found"}}))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Custom 404.</strong> Replace the default handler so unknown routes
+      return JSON <code>{:error "no such route"}</code>. (Hint: <code>create-default-handler</code> accepts
+      <code>:not-found</code>.)
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def not-found
+  (fn [_] {:status 404 :body {:error "no such route"}}))
+
+(ring/create-default-handler
+  {:not-found (fn [_]
+                {:status 404
+                 :headers {"Content-Type" "application/json"}
+                 :body "{\"error\":\"no such route\"}"})})
+;; default-handler bodies are strings/bytes - hence the raw JSON.</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 10</h2>
+      <form class="quiz" data-quiz="m10">
+        <fieldset class="q" data-answer="b">
+          <legend>1 &middot; In Ring, a handler is&hellip;</legend>
+          <label><input type="radio" name="m10q1" value="a"><span>a class implementing an interface</span></label>
+          <label><input type="radio" name="m10q1" value="b"><span>a function from a request map to a response map</span></label>
+          <label><input type="radio" name="m10q1" value="c"><span>an annotated method discovered at startup</span></label>
+          <div class="explain" hidden>Request in (map), response out ({:status :headers :body}). No interfaces, no reflection magic.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>2 &middot; Ring middleware is&hellip;</legend>
+          <label><input type="radio" name="m10q2" value="a"><span>a servlet filter configured in XML</span></label>
+          <label><input type="radio" name="m10q2" value="b"><span>a global variable the router reads</span></label>
+          <label><input type="radio" name="m10q2" value="c"><span>a function that takes a handler and returns a new handler</span></label>
+          <div class="explain" hidden>((wrap-timing wrap-errors app)) - decoration is explicit composition you control and can unit-test standalone.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>3 &middot; With Reitit + Malli coercion, where does a validated request body arrive?</legend>
+          <label><input type="radio" name="m10q3" value="a"><span>In <code>:body-params</code> of the request, already parsed and checked against the schema</span></label>
+          <label><input type="radio" name="m10q3" value="b"><span>You must call Jackson yourself inside each handler</span></label>
+          <label><input type="radio" name="m10q3" value="c"><span>In :headers as base64</span></label>
+          <div class="explain" hidden>Muuntaja decodes content negotiation into :body-params; Malli validates per the route's :parameters and rejects bad requests with details before your handler runs.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>4 &middot; Why can you test handlers in the REPL with plain maps?</legend>
+          <label><input type="radio" name="m10q4" value="a"><span>Because Ring spawns an embedded test server automatically</span></label>
+          <label><input type="radio" name="m10q4" value="b"><span>Because Reitit mocks the servlet API</span></label>
+          <label><input type="radio" name="m10q4" value="c"><span>You can't - only through curl</span></label>
+          <label><input type="radio" name="m10q4" value="d"><span>Because handlers are pure map-to-map functions independent of the transport layer</span></label>
+          <div class="explain" hidden>The adapter (Jetty) is just one caller of your handler. Any other caller - tests, the REPL, other middleware - works identically.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>5 &middot; Which template gives you a full-stack starter similar to Spring Initializr?</legend>
+          <label><input type="radio" name="m10q5" value="a"><span>tools.namespace</span></label>
+          <label><input type="radio" name="m10q5" value="b"><span>core.async</span></label>
+          <label><input type="radio" name="m10q5" value="c"><span>Luminus (or Kit)</span></label>
+          <div class="explain" hidden>Luminus/Kit scaffold web + DB + frontend profiles. Pedestal suits interceptor-style high-throughput services.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m09-macros-metaprogramming.html"><span class="dir">&larr; PREV</span>Module 09 &middot; Macros &amp; Metaprogramming</a>
+      <a class="next" href="m11-postgres-nextjdbc-honeysql.html"><span class="dir">NEXT &rarr;</span>Module 11 &middot; PostgreSQL: next.jdbc + HoneySQL</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

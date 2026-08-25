@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 06 · Sequences, Laziness &amp; Transducers — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m06">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 2 &middot; Idiomatic Power &rsaquo; <b>Module 06</b></nav>
+    <h1>Sequences, Laziness &amp; Transducers</h1>
+    <p class="subtitle">One abstraction over every kind of list-shaped data, lazy evaluation done safely, and transducers for composable high-performance transforms.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Treat vectors, maps, strings and streams uniformly via the seq abstraction.</li>
+        <li>Use laziness deliberately &mdash; and know its two classic traps.</li>
+        <li>Know the core sequence toolbox by heart.</li>
+        <li>Write transducer pipelines with <code>comp</code> and <code>into</code>.</li>
+      </ul>
+    </div>
+
+    <h2>The sequence abstraction</h2>
+    <p>A <em>seq</em> is a logical view of anything list-shaped. Vectors, maps, sets, strings and even
+    SQL result sets convert to seqs, and every sequence function works on all of them:</p>
+    <pre><code class="language-clojure">(first "hello")          ;=&gt; \h
+(first {:a 1 :b 2})      ;=&gt; [:a 1]         maps are pairs when viewed as seqs
+(rest [1 2 3])           ;=&gt; (2 3)
+(cons 0 [1 2 3])         ;=&gt; (0 1 2 3)
+
+(map? [1 2])             ;=&gt; false
+(seq {:a 1})             ;=&gt; ([:a 1])       explicit conversion
+
+;; conj adds where it's cheapest for the concrete type:
+(conj [1 2] 3)           ;=&gt; [1 2 3]
+(conj '(1 2) 3)          ;=&gt; (3 1 2)   front of a list!
+(into [] (range 3))      ;=&gt; [0 1 2]   pour into a chosen container</code></pre>
+
+    <h2>Laziness: compute only what you consume</h2>
+    <pre><code class="language-clojure">;; infinite sequences are ordinary values:
+(take 5 (range))                    ;=&gt; (0 1 2 3 4)
+(take 5 (iterate #(* 2 %) 1))       ; powers of two: (1 2 4 8 16)
+(take 3 (cycle [:red :green]))      ;=&gt; (:red :green :red)
+
+(defn fibs []
+  (map first
+       (iterate (fn [[a b]] [b (+ a b)]) [0 1])))
+
+(take 10 (fibs))
+;=&gt; (0 1 1 2 3 5 8 13 21 34)</code></pre>
+    <div class="box warn">
+      <div class="box-title">The two classic laziness traps</div>
+      <p><strong>1. Holding the head.</strong> If you <code>def</code> an infinite/lazy seq and keep the start
+      referenced, every realized element stays in memory forever. Realize eagerly inside functions instead of
+      caching lazy values at top level.</p>
+      <p><strong>2. Side effects in lazy operations.</strong> Lazy steps may run later, partially, or never.
+      Use <code>mapv</code>/<code>run!</code>/<code>doall</code> when you need effects to happen now:</p>
+    </div>
+    <pre><code class="language-clojure">(run! println [1 2 3])     ; guaranteed, eager side effects
+(mapv save-user users)     ; eager map returning a vector
+(doall (map process rows)) ; force realization, return the seq</code></pre>
+
+    <h2>The toolbox you will use daily</h2>
+    <table>
+      <tr><th>Job</th><th>Functions</th></tr>
+      <tr><td>Transform each item</td><td><code>map</code> <code>mapcat</code> <code>keep</code> <code>keep-indexed</code> <code>map-indexed</code></td></tr>
+      <tr><td>Select / reject</td><td><code>filter</code> <code>remove</code> <code>take</code> <code>drop</code> <code>take-while</code> <code>drop-while</code> <code>distinct</code> <code>dedupe</code></td></tr>
+      <tr><td>Combine / reshape</td><td><code>concat</code> <code>interleave</code> <code>interpose</code> <code>partition</code> <code>partition-all</code> <code>partition-by</code> <code>flatten</code></td></tr>
+      <tr><td>Aggregate / group</td><td><code>reduce</code> <code>reductions</code> <code>group-by</code> <code>frequencies</code> <code>sort</code> <code>sort-by</code> <code>min-key</code> <code>max-key</code></td></tr>
+      <tr><td>Extract</td><td><code>first</code> <code>second</code> <code>last</code> <code>nth</code> <code>rand-nth</code> <code>some</code> <code>every?</code></td></tr>
+      <tr><td>Eager versions</td><td><code>mapv</code> <code>filterv</code> <code>reduce</code> <code>into</code> <code>run!</code></td></tr>
+    </table>
+    <pre><code class="language-clojure">(def orders
+  [{:id 1 :customer "ada" :total 120 :status :paid}
+   {:id 2 :customer "bob" :total 30  :status :open}
+   {:id 3 :customer "ada" :total 80  :status :paid}])
+
+(-&gt;&gt; orders
+    (filter #(= :paid (:status %)))
+    (group-by :customer)
+    (map (fn [[cust os]]
+           [cust (reduce + (map :total os))])))
+;=&gt; (["ada" 200])
+
+(frequencies [:a :b :a])            ;=&gt; {:a 2, :b 1}
+(sort-by :total &gt; orders)           ; biggest order first
+(partition-all 2 [1 2 3 4 5])       ;=&gt; ((1 2) (3 4) (5))
+(interpose "," ["x" "y"])           ;=&gt; ("x" "," "y")
+(clojure.string/join ", " ["x" "y"]);=&gt; "x, y" - usually what you meant</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Clojure seqs vs Java Streams</div>
+      <table>
+        <tr><th></th><th>Clojure lazy seq</th><th>Java Stream</th></tr>
+        <tr><td>Trigger</td><td>pulled element-by-element on traversal</td><td>pulled by terminal operation</td></tr>
+        <tr><td>Reusable?</td><td>yes &mdash; realized results are cached data</td><td>no &mdash; one-shot</td></tr>
+        <tr><td>Data or pipeline?</td><td>a real data structure (countable, serializable)</td><td>a computation recipe</td></tr>
+        <tr><td>Parallelism</td><td><code>pmap</code>, reducers</td><td><code>.parallel()</code></td></tr>
+        <tr><td>Composable without collections</td><td>transducers</td><td>collectors, awkwardly</td></tr>
+      </table>
+    </div>
+
+    <h2>Transducers: transformations decoupled from collections</h2>
+    <p><code>(map f)</code> with <em>one argument</em> returns a <strong>transducer</strong>: the transformation
+    itself, independent of any collection. Compose them, then apply to whatever consumes items:</p>
+    <pre><code class="language-clojure">(def xf
+  (comp (map :total)
+        (filter pos?)
+        (take 3)))
+
+(into [] xf orders)                 ; =&gt; into a vector
+(sequence xf orders)                ; =&gt; as a lazy seq
+(transduce xf + 0 orders)           ; =&gt; straight into a reduction
+
+(eduction xf (range 1000))          ; reusable, single-pass pipeline value</code></pre>
+    <p>Why bother? A single pass, no intermediate sequences, and the same pipeline works over vectors,
+    channels (core.async), streams and I/O. It is the push-based sibling of Java Streams' pull model.</p>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>ETL jobs, log analysis, CSV/report generation and Kafka consumers are written as threaded sequence
+      pipelines exactly like the <code>orders</code> example above. Metabase's query engine and Nubank's data
+      tooling are essentially industrial-strength sequence processing over database cursors.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Word frequency.</strong> Given
+      <code>"the quick the lazy the dog"</code>, produce the three most frequent words using
+      <code>frequencies</code> and <code>sort-by val &gt;</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(-&gt;&gt; "the quick the lazy the dog"
+     (#(clojure.string/split % #" "))
+     frequencies
+     (sort-by val &gt;)
+     (take 3))
+;=&gt; (["the" 3] ...)</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Fibonacci, twice.</strong> Get the first 20 Fibonacci numbers via
+      the <code>iterate</code> version from the lecture; then write a <code>lazy-seq</code> version that refers to
+      itself:
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def fibs
+  (lazy-seq
+    (map first (iterate (fn [[a b]] [b (+ a b)]) [0 1]))))
+
+(take 20 fibs)</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Sliding window.</strong> From <code>[1 2 3 4 5]</code> build
+      overlapping pairs <code>((1 2) (2 3) (3 4) (4 5))</code> with <code>partition</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(partition 2 1 [1 2 3 4 5])
+;; partition size step coll - step 1 slides the window.</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Transducer rewrite.</strong> Convert this chain into a single-pass
+      transducer pipeline with <code>into</code>:
+      <code>(map inc (filter odd? (range 100)))</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(into [] (comp (filter odd?) (map inc)) (range 100))
+;; one pass, no intermediate seqs; take also short-circuits if composed in.</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Group and summarize.</strong> Using <code>group-by</code> +
+      <code>mapv</code>, turn a list of expense maps into totals per category.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(def expenses [{:cat :food :amt 10} {:cat :travel :amt 25} {:cat :food :amt 7}])
+
+(-&gt;&gt; expenses
+    (group-by :cat)
+    (mapv (fn [[cat xs]] [cat (reduce + (map :amt xs))])))
+;=&gt; [[:food 17] [:travel 25]]</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 06</h2>
+      <form class="quiz" data-quiz="m06">
+        <fieldset class="q" data-answer="c">
+          <legend>1 &middot; What does laziness mean for a Clojure sequence?</legend>
+          <label><input type="radio" name="m06q1" value="a"><span>It runs on a background thread</span></label>
+          <label><input type="radio" name="m06q1" value="b"><span>It skips nil values automatically</span></label>
+          <label><input type="radio" name="m06q1" value="c"><span>Elements are computed only as they are consumed, then cached</span></label>
+          <div class="explain" hidden>Lazy seqs realize elements on demand and remember them - enabling infinite sequences and cheap partial consumption.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>2 &middot; Why is <code>(def all-results (huge-lazy-computation))</code> at top level risky?</legend>
+          <label><input type="radio" name="m06q2" value="a"><span>Lazy seqs cannot be defined with def</span></label>
+          <label><input type="radio" name="m06q2" value="b"><span>Holding the head retains everything realized so far in memory forever</span></label>
+          <label><input type="radio" name="m06q2" value="c"><span>def forces immediate full realization anyway</span></label>
+          <div class="explain" hidden>The head-holding problem: as long as the root reference lives, all cached elements live too. Prefer realizing inside function scope or using reduce/into.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>3 &middot; Which function guarantees eager execution with side effects per element?</legend>
+          <label><input type="radio" name="m06q3" value="a"><span>map</span></label>
+          <label><input type="radio" name="m06q3" value="b"><span>filter</span></label>
+          <label><input type="radio" name="m06q3" value="c"><span>iterate</span></label>
+          <label><input type="radio" name="m06q3" value="d"><span>run! (or mapv/doall)</span></label>
+          <div class="explain" hidden>map/filter are lazy and may defer or skip work; run!, mapv and doall force eager evaluation.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>4 &middot; What does calling <code>(map f)</code> with a single argument give you?</legend>
+          <label><input type="radio" name="m06q4" value="a"><span>A transducer - the transformation decoupled from any collection</span></label>
+          <label><input type="radio" name="m06q4" value="b"><span>A partially applied mapper waiting for one more item</span></label>
+          <label><input type="radio" name="m06q4" value="c"><span>An error - map needs a collection</span></label>
+          <div class="explain" hidden>Arity-1 map/filter/take etc. return transducers, composable with comp and applicable via into/sequence/transduce/channels.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>5 &middot; How do lazy seqs differ from Java Streams?</legend>
+          <label><input type="radio" name="m06q5" value="a"><span>They are identical concepts with different names</span></label>
+          <label><input type="radio" name="m06q5" value="b"><span>A realized lazy seq is a reusable cached data structure; Streams are one-shot recipes</span></label>
+          <label><input type="radio" name="m06q5" value="c"><span>Streams are lazy, lazy seqs are eager</span></label>
+          <div class="explain" hidden>Once traversed, a seq is plain data you can count, pass around or re-walk. A consumed Stream throws if reused.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m05-control-flow-threading.html"><span class="dir">&larr; PREV</span>Module 05 &middot; Control Flow &amp; Threading Macros</a>
+      <a class="next" href="m07-state-concurrency.html"><span class="dir">NEXT &rarr;</span>Module 07 &middot; State &amp; Concurrency</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

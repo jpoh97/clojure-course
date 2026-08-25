@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 01 · Setup &amp; the REPL — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m01">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 1 &middot; Foundations &rsaquo; <b>Module 01</b></nav>
+    <h1>Setup &amp; the REPL</h1>
+    <p class="subtitle">Get the toolchain running and adopt the workflow that makes Clojure development feel different from everything else on the JVM.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Install the JDK and Clojure CLI (and know when to reach for Leiningen).</li>
+        <li>Create and run a minimal project.</li>
+        <li>Use the REPL for exploration and self-documentation.</li>
+        <li>Set up an editor with an integrated REPL (Calva or Cursive).</li>
+      </ul>
+    </div>
+
+    <h2>What you will install</h2>
+    <p>Clojure is a library on the JVM: the compiler is a jar that your programs depend on. You need three things:</p>
+    <ol>
+      <li><strong>A JDK</strong> &mdash; any modern one works. Temurin 21 LTS is a safe default.</li>
+      <li><strong>A build runner</strong> &mdash; either the official <strong>Clojure CLI</strong> (<code>clj</code>, driven by <code>deps.edn</code>) or <strong>Leiningen</strong> (<code>lein</code>). Both download dependencies from Maven Central, exactly like Gradle/Maven do.</li>
+      <li><strong>An editor with REPL integration</strong> &mdash; VS&nbsp;Code + Calva, or IntelliJ + Cursive (the natural pick coming from JetBrains world).</li>
+    </ol>
+
+    <pre><code class="language-bash"># Windows (PowerShell) - adjust for macOS/Linux as documented on clojure.org
+winget install EclipseAdoptium.Temurin.21.JDK
+winget install Clojure.ClojureCLI        # official CLI tools
+# alternative: scoop install temurin21-jdk; scoop install clojure
+
+java -version                            # should print 21.x
+clj --version                            # should print a Clojure version like 1.12.x</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p><code>deps.edn</code> is to the Clojure CLI what <code>build.gradle</code> is to Gradle: an EDN
+      (Extensible Data Notation &mdash; think JSON with keywords) file declaring paths and dependencies.
+      Leiningen plays the same role with <code>project.clj</code> plus extra conveniences (templates,
+      packaging). Older tutorials use Leiningen; new projects usually prefer the CLI. This course uses the CLI.</p>
+    </div>
+
+    <h2>Your first project</h2>
+    <p>Create a folder with this structure:</p>
+    <pre><code class="language-text">hello/
+  deps.edn
+  src/hello/core.clj</code></pre>
+    <pre><code class="language-clojure">;; deps.edn
+{:paths ["src"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.1"}}}</code></pre>
+    <pre><code class="language-clojure">;; src/hello/core.clj
+(ns hello.core)
+
+(defn -main []
+  (println "Hello from Clojure!"))</code></pre>
+    <pre><code class="language-bash">cd hello
+clj -M -m hello.core          # compiles and calls hello.core/-main
+Hello from Clojure!</code></pre>
+
+    <h2>The REPL: your new home screen</h2>
+    <p>Run <code>clj</code> with no arguments to get a REPL &mdash; <strong>R</strong>ead, <strong>E</strong>valuate,
+    <strong>P</strong>rint, <strong>L</strong>oop. Unlike jshell, this is not a debugging toy: production
+    Clojure developers spend most of the day connected to a REPL attached to their real application.</p>
+    <pre><code class="language-clojure">$ clj
+Clojure 1.12.1
+user=&gt; (+ 1 2 3)
+6
+user=&gt; (def name "Ada")
+#'user/name
+user=&gt; (str "Hi, " name)
+"Hi, Ada"
+user=&gt; *1                       ; *1 holds the last printed result
+"Hi, Ada"
+user=&gt; (* 2 21)</code></pre>
+
+    <p>The REPL can describe itself:</p>
+    <pre><code class="language-clojure">user=&gt; (doc map)                ; prints docstring and signature
+user=&gt; (source take)             ; shows the actual implementation!
+user=&gt; (apropos "filter")        ; find functions by substring
+user=&gt; (dir clojure.string)      ; list everything in a namespace
+user=&gt; (require '[clojure.string :as str])   ; load a lib, alias it
+user=&gt; (str/upper-case "quiet")
+"QUIET"</code></pre>
+
+    <div class="box tip">
+      <div class="box-title">The core workflow shift</div>
+      <p>In Spring you write a controller, restart, curl, read logs, repeat. In Clojure you connect the
+      REPL to your app, evaluate a single handler function with a hand-made request map, inspect the
+      response map instantly, tweak the function, re-evaluate &mdash; seconds, not minutes. Modules 07&ndash;11
+      lean on this constantly.</p>
+    </div>
+
+    <h2>Editor setup</h2>
+    <table>
+      <tr><th>Option</th><th>Notes</th></tr>
+      <tr><td><strong>VS Code + Calva</strong> (free)</td><td>Install the Calva extension, open the project, run <em>Calva: Start a Project REPL and Connect (Jack-in)</em>. Evaluate the current/top-level form with <code>Alt+Enter</code>; send selections to the REPL; inline results appear right in the editor.</td></tr>
+      <tr><td><strong>IntelliJ + Cursive</strong></td><td>The polished IDE experience you know from Kotlin. REPL integration, structural editing, debugger. Free for non-commercial use; license otherwise.</td></tr>
+      <tr><td>Emacs + CIDER</td><td>The classic power setup. Optional pilgrimage later.</td></tr>
+    </table>
+
+    <h2>Reloading code without restarting</h2>
+    <p>When files change on disk, reload namespaces into the running process with <code>tools.namespace</code>.
+    Add it as a dev dependency:</p>
+    <pre><code class="language-clojure">;; deps.edn (aliases section)
+{:paths ["src"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.1"}}
+ :aliases
+ {:dev {:extra-deps {org.clojure/tools.namespace {:mvn/version "1.5.0"}}}}}</code></pre>
+    <pre><code class="language-clojure">;; in the REPL (started with clj -A:dev or from your editor)
+(require '[clojure.tools.namespace.repl :refer [refresh]])
+(refresh)                        ; clean re-load of changed namespaces</code></pre>
+    <p>Later, systems built with Integrant get a one-call <code>(reset)</code> that stops and restarts the whole
+    application in-process &mdash; faster than Spring DevTools hot-restarts.</p>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Teams script operational chores with <strong>Babashka</strong> (<code>bb</code>) &mdash; a native
+      compiled Clojure interpreter that starts in milliseconds:</p>
+    </div>
+    <pre><code class="language-bash">winget install babashka.cli       # or scoop install babashka</code></pre>
+    <pre><code class="language-clojure">#!/usr/bin/env bb
+;; deploy-notes.bb - instant-startup scripting, replaces bash+curl glue
+(println (slurp "https://api.github.com/repos/clojure/clojure/tags"))</code></pre>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Verify your toolchain.</strong>
+      Print the output of <code>java -version</code> and <code>clj --version</code>. If <code>clj</code> fails on
+      Windows PowerShell, confirm the installer added its scripts to PATH.
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>First REPL session.</strong> Start <code>clj</code>, compute
+      <code>(* 6 7)</code>, bind the result with <code>def</code>, then call <code>(str "answer: " answer-var)</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">user=&gt; (def answer (* 6 7))
+#'user/answer
+user=&gt; (str "answer: " answer)
+"answer: 42"</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Explore the docs.</strong> Look up <code>(doc reduce)</code>,
+      <code>(source take)</code> and find every function whose name mentions <code>"take"</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(doc reduce)
+(source take)
+(apropos "take")     ; =&gt; (take take-last take-nth take-while)</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Scratchpad habit.</strong> Add a <code>(comment ...)</code> block to
+      <code>core.clj</code>, put an expression inside, and evaluate it from your editor without touching the main code.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(ns hello.core)
+
+(defn -main [] (println "Hello from Clojure!"))
+
+(comment
+  (+ 40 2)                 ; place cursor here, press Alt+Enter (Calva)
+  (str "scratch" " pad"))</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 01</h2>
+      <form class="quiz" data-quiz="m01">
+        <fieldset class="q" data-answer="a">
+          <legend>1 &middot; What does REPL stand for?</legend>
+          <label><input type="radio" name="m01q1" value="a"><span>Read-Eval-Print Loop</span></label>
+          <label><input type="radio" name="m01q1" value="b"><span>Runtime Evaluation Protocol Layer</span></label>
+          <label><input type="radio" name="m01q1" value="c"><span>Release-Employee-Production Loop</span></label>
+          <div class="explain" hidden>The REPL reads a form, evaluates it, prints the result, and loops. It is the primary interactive development environment for Clojure.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>2 &middot; Which tool reads a <code>deps.edn</code> file?</legend>
+          <label><input type="radio" name="m01q2" value="a"><span>Leiningen</span></label>
+          <label><input type="radio" name="m01q2" value="b"><span>The Clojure CLI tools (<code>clj</code>)</span></label>
+          <label><input type="radio" name="m01q2" value="c"><span>Maven, via pom.xml</span></label>
+          <label><input type="radio" name="m01q2" value="d"><span>Gradle</span></label>
+          <div class="explain" hidden>Leiningen uses <code>project.clj</code>; the official CLI tools use <code>deps.edn</code>. Both resolve libraries from Maven Central.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>3 &middot; Inside a REPL session, what does <code>*1</code> hold?</legend>
+          <label><input type="radio" name="m01q3" value="a"><span>The first value ever evaluated</span></label>
+          <label><input type="radio" name="m01q3" value="b"><span>An error flag</span></label>
+          <label><input type="radio" name="m01q3" value="c"><span>The last value the REPL printed</span></label>
+          <div class="explain" hidden><code>*1</code>, <code>*2</code> and <code>*3</code> hold the last three printed results; <code>*e</code> holds the last exception.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>4 &middot; Which editor setups give you an integrated REPL against your running program?</legend>
+          <label><input type="radio" name="m01q4" value="a"><span>Only Emacs with CIDER</span></label>
+          <label><input type="radio" name="m01q4" value="b"><span>VS Code + Calva and IntelliJ + Cursive (among others)</span></label>
+          <label><input type="radio" name="m01q4" value="c"><span>No editor can - you must use the terminal</span></label>
+          <div class="explain" hidden>All major editors support connected REPL workflows: evaluating individual forms from source files into the live process.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>5 &middot; What does the <code>(comment ...)</code> form do?</legend>
+          <label><input type="radio" name="m01q5" value="a"><span>Its contents are skipped by the reader - commonly used as an evaluatable scratchpad</span></label>
+          <label><input type="radio" name="m01q5" value="b"><span>It logs its contents at compile time</span></label>
+          <label><input type="radio" name="m01q5" value="c"><span>It comments code out only in tests</span></label>
+          <div class="explain" hidden><code>(comment)</code> returns nil and never runs its body, yet editors can still evaluate expressions inside it selectively - ideal for experiments.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="index.html"><span class="dir">&larr; BACK</span>Course overview</a>
+      <a class="next" href="m02-syntax-essentials.html"><span class="dir">NEXT &rarr;</span>Module 02 &middot; Syntax Essentials</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

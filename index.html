@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learn Clojure — a practical course for Java/Kotlin engineers</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="#why">Why Clojure</a>
+    <a href="#companies">Who uses it</a>
+    <a href="#stackmap">Spring &rarr; Clojure</a>
+    <a href="#roadmap">Roadmap</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="kicker">A hands-on course for engineers who already ship software</div>
+  <h1>Learn Clojure the practical way</h1>
+  <p class="sub">
+    You know Spring, Play, PostgreSQL and React. This course teaches you Clojure by
+    building real things with it &mdash; APIs, database layers and full-stack apps &mdash;
+    while constantly mapping every concept back to the JVM ecosystem you already know.
+  </p>
+  <div class="cta-row">
+    <a class="btn" href="m01-setup-and-repl.html">Start Module 01 &rarr;</a>
+    <a class="btn secondary" href="#roadmap">View the roadmap</a>
+  </div>
+  <div class="stats-row" id="homeProgress"></div>
+</section>
+
+<!-- ============ WHY ============ -->
+<section class="landing-section" id="why">
+  <h2>Why does Clojure exist &mdash; and why do teams choose it?</h2>
+  <p class="lead">
+    Clojure is a modern Lisp that compiles to JVM bytecode. It gives you the performance,
+    libraries and deployment story of Java, combined with functional programming,
+    immutable data structures and an interactive REPL workflow.
+  </p>
+  <div class="card-grid">
+    <div class="card blue">
+      <span class="card-icon">JVM</span>
+      <h3>The whole Java world, for free</h3>
+      <p>Call Jackson, Netty, Kafka, the AWS SDK, HikariCP &mdash; any of the millions of Maven
+      artifacts &mdash; directly from Clojure. Deploys like any Spring app: a jar on the JVM.</p>
+    </div>
+    <div class="card">
+      <span class="card-icon">{}</span>
+      <h3>Immutable data by default</h3>
+      <p>Vectors, maps and sets are persistent and safely shareable across threads. Entire bug
+      categories you fight in concurrent Java/Kotlin code simply disappear.</p>
+    </div>
+    <div class="card blue">
+      <span class="card-icon">&gt;_</span>
+      <h3>REPL-driven development</h3>
+      <p>Evaluate code inside your <em>running</em> application. No redeploy cycle to try an idea &mdash;
+      think jshell/kotlin REPL, but central to how production systems are actually built.</p>
+    </div>
+    <div class="card">
+      <span class="card-icon">( )</span>
+      <h3>A language you can extend</h3>
+      <p>Code is data (Lisp). Macros let libraries provide what other ecosystems need framework
+      features for. The language stays small; the library ecosystem does the rest.</p>
+    </div>
+    <div class="card blue">
+      <span class="card-icon">&#8776;100</span>
+      <h3>Small core, huge leverage</h3>
+      <p>Roughly a hundred core functions compose into everything: HTTP handlers are just maps-in/
+      map-out functions, SQL queries are just data structures. Less ceremony than layered frameworks.</p>
+    </div>
+    <div class="card">
+      <span class="card-icon">$</span>
+      <h3>Battle-tested at serious scale</h3>
+      <p>Nubank serves tens of millions of customers on Clojure microservices and liked it so much
+      they bought the company behind it (Cognitect) in 2020.</p>
+    </div>
+  </div>
+
+  <div class="box analogy">
+    <div class="box-title">The one-paragraph pitch</div>
+    <p>In Spring, behavior lives in classes annotated with framework magic, and state mutates all
+    over the place. In Clojure, behavior is plain functions and state is plain immutable data
+    &mdash; so you test functions directly in the REPL instead of booting a container, and you reason
+    about your program like data transformations instead of object interactions.</p>
+  </div>
+
+  <pre><code class="language-clojure">;; Modeling data: Java vs Clojure
+;; Java:   Map&lt;String,Object&gt; user = new HashMap&lt;&gt;(); user.put("email", "ada@x.io");
+;; Kotlin: val user = mapOf("email" to "ada@x.io")
+
+(def user {:email "ada@x.io" :roles #{:admin}})     ; a value - just data
+
+(assoc user :name "Ada")                            ; "change" returns a NEW value
+user                                                ; original untouched
+=&gt; {:email "ada@x.io", :roles #{:admin}}</code></pre>
+</section>
+
+<!-- ============ USE CASES ============ -->
+<section class="landing-section" id="usecases">
+  <h2>What is Clojure actually used for?</h2>
+  <p class="lead">Its sweet spot is server-side systems where correctness under concurrency and fast iteration matter.</p>
+  <div class="card-grid">
+    <div class="card"><span class="card-icon">API</span><h3>Web APIs &amp; services</h3><p><strong>Best fit.</strong> Ring + Reitit + next.jdbc against Postgres. Handlers are pure functions &mdash; trivially testable without booting Spring.</p></div>
+    <div class="card"><span class="card-icon">FIN</span><h3>Fintech &amp; banking</h3><p>Nubank's choice. Immutability plus STM/atoms make money-moving invariants easier to prove and harder to corrupt.</p></div>
+    <div class="card"><span class="card-icon">ETL</span><h3>Data processing &amp; pipelines</h3><p>Lazy sequences, transducers and reducers shine at transforming streams of records; great fit with Kafka via its native Java client.</p></div>
+    <div class="card"><span class="card-icon">WEB</span><h3>Full-stack SaaS</h3><p>ClojureScript + Reagent/re-frame on the frontend shares schemas and validation code with your backend &mdash; one language, both ends.</p></div>
+    <div class="card"><span class="card-icon">OPS</span><h3>Tooling &amp; scripting</h3><p>Babashka starts instantly and replaces Bash/Python glue scripts with a real language on the JVM.</p></div>
+    <div class="card"><span class="card-icon">DB</span><h3>Immutable-database products</h3><p>Datomic, XTDB and Datahike were born here &mdash; databases built on the same immutable-values philosophy as the language.</p></div>
+  </div>
+</section>
+
+<!-- ============ COMPANIES ============ -->
+<section class="landing-section" id="companies">
+  <h2>Who uses Clojure in production?</h2>
+  <p class="lead">From public engineering blogs, conference talks and clojure.org showcases:</p>
+  <div class="company-grid">
+    <div class="company"><b>Nubank</b><span>Largest digital bank in the Americas; hundreds of Clojure microservices, ~100M customers. Acquired Cognitect (makers of Clojure/Datomic).</span></div>
+    <div class="company"><b>Metabase</b><span>The popular open-source BI tool you may have used at work is written end-to-end in Clojure + ClojureScript.</span></div>
+    <div class="company"><b>Figma</b><span>Runs its multiplayer editing server logic in ClojureScript compiled to JavaScript on the server side.</span></div>
+    <div class="company"><b>Walmart</b><span>Walmart's e-commerce platform famously ran Black Friday traffic on Clojure services (public talks).</span></div>
+    <div class="company"><b>CircleCI</b><span>The CI/CD platform was originally built with Clojure services.</span></div>
+    <div class="company"><b>SoundCloud</b><span>Adopted Clojure for backend components (their well-known "Playing Clojure" post).</span></div>
+    <div class="company"><b>Puppet</b><span>Puppet Server and related infrastructure tooling are implemented in Clojure.</span></div>
+    <div class="company"><b>Funding Circle</b><span>The lending marketplace has publicly used Clojure for backend services.</span></div>
+    <div class="company"><b>Pitch</b><span>The presentation-software startup built its frontend with ClojureScript + Reagent.</span></div>
+    <div class="company"><b>Roam Research</b><span>The outliner/note-taking tool is a Clojure + ClojureScript application.</span></div>
+    <div class="company"><b>Nextjournal</b><span>Computational notebook product built with Clojure(Script).</span></div>
+    <div class="company"><b>Boeing, Amazon, Apple&hellip;</b><span>Listed among organizations using Clojure internally on clojure.org's historical company list.</span></div>
+  </div>
+  <div class="box tip">
+    <div class="box-title">Reading the market honestly</div>
+    <p>Clojure job listings are far fewer than Java's &mdash; but they skew senior, remote-friendly and
+    well-paid, and Clojure skills transfer directly: you keep the entire JVM platform, Postgres included.</p>
+  </div>
+</section>
+
+<!-- ============ STACK MAP ============ -->
+<section class="landing-section" id="stackmap">
+  <h2>Your stack, translated</h2>
+  <p class="lead">Every tool you already know has a Clojure counterpart. The course covers the important ones.</p>
+  <table>
+    <tr><th>You know&hellip;</th><th>Clojure world</th><th>Covered in</th></tr>
+    <tr><td>Maven / Gradle</td><td><code>deps.edn</code> (tools.deps) or Leiningen</td><td>Module 01</td></tr>
+    <tr><td>jshell / kotlin REPL</td><td>The REPL &mdash; a first-class development workflow</td><td>Module 01</td></tr>
+    <tr><td>Spring MVC controllers</td><td>Ring handlers + Reitit routes (maps in, maps out)</td><td>Module 10</td></tr>
+    <tr><td>Servlet filters / interceptors</td><td>Ring middleware (just higher-order functions)</td><td>Module 10</td></tr>
+    <tr><td>Jackson / message converters</td><td>Cheshire, Muuntaja (JSON, EDN, Transit)</td><td>Modules 08, 10</td></tr>
+    <tr><td>Bean Validation</td><td>Malli or clojure.spec (schemas are data)</td><td>Module 10</td></tr>
+    <tr><td>Hibernate / JPA / Exposed</td><td>next.jdbc + HoneySQL or HugSQL (SQL-first)</td><td>Module 11</td></tr>
+    <tr><td>HikariCP</td><td>HikariCP itself, wired up in ~5 lines</td><td>Module 11</td></tr>
+    <tr><td>Flyway / Liquibase</td><td>Migratus or Ragtime</td><td>Module 11</td></tr>
+    <tr><td>Spring DI container</td><td>Integrant / Mount / Component &mdash; or plain function arguments</td><td>Modules 10, 13</td></tr>
+    <tr><td>JUnit + Mockito</td><td>clojure.test (+ test.check property testing)</td><td>Module 13</td></tr>
+    <tr><td>synchronized / AtomicReference</td><td>Atoms, Refs (STM), Agents</td><td>Module 07</td></tr>
+    <tr><td>Kotlin coroutines channels</td><td>core.async</td><td>Module 07</td></tr>
+    <tr><td>Lombok @Value / data classes</td><td>Maps, defrecord</td><td>Modules 03, 08</td></tr>
+    <tr><td>React</td><td>Reagent (or UIx) &mdash; React with hiccup instead of JSX</td><td>Module 12</td></tr>
+    <tr><td>Redux / Zustand</td><td>re-frame (events, subscriptions, single app-db)</td><td>Module 12</td></tr>
+    <tr><td>Vite / Webpack</td><td>shadow-cljs</td><td>Module 12</td></tr>
+    <tr><td>GraalVM native image</td><td>Same story &mdash; plus Babashka for instant scripts</td><td>Modules 01, 08</td></tr>
+  </table>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section class="landing-section" id="roadmap">
+  <h2>The roadmap</h2>
+  <p class="lead">Thirteen modules in three phases. Each module = short lecture + tasks with solutions + a graded exam (70% to pass). Progress is saved in your browser.</p>
+
+  <div class="phase-card">
+    <div class="phase-head"><span class="phase-num">PHASE 1</span><h3>Foundations</h3></div>
+    <p>Get productive in the REPL and learn to read and write idiomatic Clojure.</p>
+    <ul class="module-list">
+      <li><span class="mid">M01</span><span><a href="m01-setup-and-repl.html">Setup &amp; the REPL</a> <span class="desc">&mdash; install the toolchain, editors (Calva/Cursive), REPL-driven workflow</span></span></li>
+      <li><span class="mid">M02</span><span><a href="m02-syntax-essentials.html">Syntax Essentials</a> <span class="desc">&mdash; expressions, scalars, keywords, namespaces, truthiness</span></span></li>
+      <li><span class="mid">M03</span><span><a href="m03-collections-immutability.html">Collections &amp; Immutability</a> <span class="desc">&mdash; vectors, maps, sets, persistent data structures</span></span></li>
+      <li><span class="mid">M04</span><span><a href="m04-functions-closures.html">Functions &amp; Closures</a> <span class="desc">&mdash; arities, varargs, destructuring, higher-order functions</span></span></li>
+      <li><span class="mid">M05</span><span><a href="m05-control-flow-threading.html">Control Flow &amp; Threading Macros</a> <span class="desc">&mdash; cond/case, loop/recur, exceptions, -&gt; and -&gt;&gt;</span></span></li>
+    </ul>
+  </div>
+
+  <div class="phase-card">
+    <div class="phase-head"><span class="phase-num">PHASE 2</span><h3>Idiomatic Power</h3></div>
+    <p>The features that make Clojure feel like Clojure &mdash; and make it safe at scale.</p>
+    <ul class="module-list">
+      <li><span class="mid">M06</span><span><a href="m06-sequences-laziness-transducers.html">Sequences, Laziness &amp; Transducers</a> <span class="desc">&mdash; the seq abstraction vs Java Streams</span></span></li>
+      <li><span class="mid">M07</span><span><a href="m07-state-concurrency.html">State &amp; Concurrency</a> <span class="desc">&mdash; atoms, refs &amp; STM, agents, core.async</span></span></li>
+      <li><span class="mid">M08</span><span><a href="m08-java-interop.html">Java Interop for JVM Veterans</a> <span class="desc">&mdash; call anything, defrecord/defprotocol, type hints</span></span></li>
+      <li><span class="mid">M09</span><span><a href="m09-macros-metaprogramming.html">Macros &amp; Metaprogramming</a> <span class="desc">&mdash; syntax-quote, writing your own control flow</span></span></li>
+    </ul>
+  </div>
+
+  <div class="phase-card">
+    <div class="phase-head"><span class="phase-num">PHASE 3</span><h3>Real Applications</h3></div>
+    <p>Everything you need to ship a production system &mdash; ending with a full-stack capstone.</p>
+    <ul class="module-list">
+      <li><span class="mid">M10</span><span><a href="m10-web-backends-ring-reitit.html">Web Backends: Ring + Reitit</a> <span class="desc">&mdash; middleware, JSON, Malli validation, error handling, deploy</span></span></li>
+      <li><span class="mid">M11</span><span><a href="m11-postgres-nextjdbc-honeysql.html">PostgreSQL: next.jdbc + HoneySQL</a> <span class="desc">&mdash; pools, transactions, migrations, JSONB</span></span></li>
+      <li><span class="mid">M12</span><span><a href="m12-frontend-cljs-reagent.html">Frontend: ClojureScript + Reagent</a> <span class="desc">&mdash; your React skills, translated; re-frame state management</span></span></li>
+      <li><span class="mid">M13</span><span><a href="m13-testing-capstone.html">Testing &amp; Capstone Project</a> <span class="desc">&mdash; clojure.test, test.check, clj-kondo + full-stack project spec</span></span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="landing-section" id="how">
+  <h2>How this site works</h2>
+  <ul>
+    <li><strong>Lectures</strong> are short and code-heavy, with constant comparisons to Spring, Kotlin and React concepts you already know.</li>
+    <li><strong>Tasks</strong> after each lecture are small REPL exercises; most have expandable solutions.</li>
+    <li><strong>Exams</strong> are 5-question quizzes. Score 70%+ to mark the module complete &mdash; checkmarks appear in the sidebar and your progress persists locally.</li>
+    <li><strong>Pace:</strong> roughly one module per day gets you through in two weeks. Modules 10&ndash;12 assume 01&ndash;09 but are readable earlier if you want the payoff first.</li>
+    <li><strong>Prerequisites:</strong> JDK 21 (Temurin), VS Code + Calva <em>or</em> IntelliJ + Cursive, Docker for the Postgres module.</li>
+  </ul>
+  <div class="box warn">
+    <div class="box-title">Honest tradeoffs before you invest</div>
+    <p>Dynamic typing means fewer compile-time guarantees than Kotlin &mdash; the ecosystem compensates with
+    Malli/spec schemas, REPL-driven tests and clj-kondo static analysis (all covered). Cold-start time makes
+    Clojure a poor fit for CLI-heavy tooling unless you use Babashka or GraalVM. Error messages and stack
+    traces take getting used to. And yes, parentheses &mdash; editors handle them, and by Module 03 you stop seeing them.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <h4>Official</h4>
+      <ul>
+        <li><a href="https://clojure.org/guides/getting_started">clojure.org &mdash; getting started</a></li>
+        <li><a href="https://clojuredocs.org">ClojureDocs (examples per fn)</a></li>
+        <li><a href="https://www.clojure-toolbox.com">The Clojure Toolbox (library catalog)</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Practice</h4>
+      <ul>
+        <li><a href="https://exercism.org/tracks/clojure">Exercism Clojure track</a></li>
+        <li><a href="https://4clojure.oxal.org">4Clojure katas</a></li>
+        <li><a href="https://www.braveclojure.com">Clojure for the Brave and True (free book)</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Community</h4>
+      <ul>
+        <li><a href="https://clojurians.slack.com">Clojurians Slack</a></li>
+        <li><a href="https://clojureverse.org">ClojureVerse forum</a></li>
+        <li><a href="https://newsletter.clojure.stream">Clojure Deref newsletter</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="copyright">Built as a personal learning companion. All progress is stored locally in your browser.</div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

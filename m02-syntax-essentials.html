@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 02 · Syntax Essentials — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m02">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 1 &middot; Foundations &rsaquo; <b>Module 02</b></nav>
+    <h1>Syntax Essentials</h1>
+    <p class="subtitle">The entire grammar of Clojure in one sitting: expressions, scalar values, keywords, vars, namespaces and truthiness.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Understand that everything is an expression evaluated to a value.</li>
+        <li>Know all scalar types and when keywords are used.</li>
+        <li>Avoid the truthiness trap coming from JavaScript/Kotlin.</li>
+        <li>Read namespace declarations and naming conventions fluently.</li>
+      </ul>
+    </div>
+
+    <h2>Everything is an expression</h2>
+    <p>Java splits the world into statements and expressions. Clojure only has expressions &mdash;
+    every form evaluates to a value, including <code>if</code>, <code>let</code> and function bodies:</p>
+    <pre><code class="language-clojure">(def label (if (&gt; 3 2) "bigger" "smaller"))
+;=&gt; #'user/label        ; the if returned a string, def bound it
+
+(let [x 10]
+  (* x x))
+;=&gt; 100                 ; let itself is an expression</code></pre>
+
+    <p><strong>Evaluation rule.</strong> The reader parses your text into data structures. Then:</p>
+    <ul>
+      <li>Atoms (<code>42</code>, <code>"hi"</code>, <code>:kw</code>) evaluate to themselves.</li>
+      <li>Symbols evaluate to whatever they refer to (a var, a parameter&hellip;).</li>
+      <li>A list <code>(f a b)</code> means a <em>call</em>: first element is the function/macro/special form, rest are arguments.</li>
+    </ul>
+    <pre><code class="language-clojure">(+ 1 2)            ;=&gt; 3
+(- 10 3)           ;=&gt; 7
+(&lt; 1 2 3)          ;=&gt; true     ; comparisons chain!
+(max 4 9 2)        ;=&gt; 9</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p>Parentheses mean <em>call this</em>, never grouping. There is no operator precedence table to memorize:
+      prefix notation is unambiguous, and operators accept any number of arguments.
+      Kotlin's <code>val x = if (c) a else b</code> already taught you expression-oriented thinking &mdash;
+      Clojure takes it everywhere.</p>
+    </div>
+
+    <h2>The scalars</h2>
+    <pre><code class="language-clojure">42 -17             ; longs
+3.14 1.5e3         ; doubles
+22/7               ; ratios! exact fractions, not floating point
+(+ 1/3 1/6)
+;=&gt; 1/2
+0xFF               ;=&gt; 255   (hex)
+
+"a string"         ; java.lang.String, immutable as usual on the JVM
+\a \newline \space ; character literals
+
+true false nil     ; nil = null, but a proper value
+
+:error :status     ; keywords - self-evaluating identifiers
+:user/email        ; namespaced keyword
+::local            ; resolves in current ns, e.g. :my.app/local</code></pre>
+
+    <p><strong>Ratios and overflow.</strong> Integer math stays exact until it overflows &mdash; loudly,
+    like Kotlin's <code>Math.addExact</code>:</p>
+    <pre><code class="language-clojure">(+ 9223372036854775807 1)
+;; ArithmeticException integer overflow
+(+' 9223372036854775807 1)
+;=&gt; 9223372036854775808N       ; auto-promoted BigInt (note the N)</code></pre>
+
+    <p><strong>Keywords vs symbols.</strong> A symbol (<code>x</code>, <code>map</code>) refers to something;
+    a keyword (<code>:email</code>) names something &mdash; typically a map key or an enum-like tag.
+    Keywords are interned: comparing them is pointer-fast.</p>
+
+    <h2>Truthiness: the #1 porting bug</h2>
+    <p>Only two values are falsy: <code>nil</code> and <code>false</code>. Everything else is truthy &mdash;</p>
+    <pre><code class="language-clojure">(if 0     :truthy :falsy)   ;=&gt; :truthy   (!)
+(if ""    :truthy :falsy)   ;=&gt; :truthy   (!)
+(if []    :truthy :falsy)   ;=&gt; :truthy
+(if nil   :truthy :falsy)   ;=&gt; :falsy
+(if false :truthy :falsy)   ;=&gt; :falsy
+
+(and 1 2 3)                 ;=&gt; 3      (and/or return values, not booleans)
+(or false nil :fallback)    ;=&gt; :fallback   ; idiomatic defaulting
+(or (:port config) 8080)</code></pre>
+
+    <div class="box warn">
+      <div class="box-title">Gotcha</div>
+      <p>If you come from JavaScript or Python, <code>0</code> and empty strings/collections being truthy will bite you once.
+      Coming from Java/Kotlin it maps better to <code>Objects::isNull</code>-style checks: think of
+      <code>(if x ...)</code> as "if x is neither null nor false".</p>
+    </div>
+
+    <h2>Vars with <code>def</code>, locals with <code>let</code></h2>
+    <pre><code class="language-clojure">(def max-retries 3)              ; top-level var in this namespace
+max-retries                      ;=&gt; 3
+
+(let [base-url "https://api.io"  ; lexical, immutable bindings
+      path "/users"
+      url (str base-url path)]   ; later bindings see earlier ones
+  url)
+;=&gt; "https://api.io/users"</code></pre>
+    <ul>
+      <li>Prefer <code>let</code> for local computation; use <code>def</code> for genuinely top-level things (config, constants).</li>
+      <li>Bindings are immutable &mdash; no reassignment exists. Where you would mutate a local, use a new binding or recursion (Module 05).</li>
+    </ul>
+
+    <h3>Naming conventions</h3>
+    <table>
+      <tr><th>Convention</th><th>Example</th><th>Meaning</th></tr>
+      <tr><td>kebab-case always</td><td><code>order-total</code></td><td>No camelCase; dashes are ordinary characters in symbols.</td></tr>
+      <tr><td>Trailing <code>?</code></td><td><code>valid?</code> <code>empty?</code></td><td>Returns a boolean predicate.</td></tr>
+      <tr><td>Trailing <code>!</code></td><td><code>swap!</code> <code>reset!</code></td><td>Mutates state - handle with care.</td></tr>
+      <tr><td>Earmuffs <code>*x*</code></td><td><code>*out*</code></td><td>Dynamically scoped var (Module 07).</td></tr>
+      <tr><td>Leading dash</td><td><code>-main</code></td><td>JVM entrypoint convention.</td></tr>
+    </table>
+
+    <h2>Namespaces = modules + imports</h2>
+    <pre><code class="language-clojure">(ns myapp.orders                       ; file lives at src/myapp/orders.clj
+  (:require [clojure.string :as str]   ; lib -&gt; alias
+            [myapp.db :as db])
+  (:import [java.time LocalDate ZoneId]))   ; Java classes
+
+(defn overdue? [due-date]
+  (.isBefore due-date (LocalDate/now)))</code></pre>
+    <ul>
+      <li>Namespace name mirrors the file path exactly, like Java packages but with dashes mapping to underscores on disk.</li>
+      <li><code>:require</code> pulls in other namespaces; aliases keep call sites short (<code>str/blank?</code>).</li>
+      <li><code>:import</code> is only needed for Java classes used without full qualification.</li>
+    </ul>
+
+    <h2>Comments and equality</h2>
+    <pre><code class="language-clojure">;; single-line comment
+#_(this-form-is-discarded-by-the-reader even-if-invalid)
+
+(comment
+  (risky-experiment 1)
+  (risky-experiment 2))     ; scratchpad, evaluate forms individually
+
+(= [1 2] '(1 2))            ;=&gt; false  (different collection types)
+(= {:a 1} {:a 1})           ;=&gt; true   structural equality by value
+(== 1 1.0)                  ;=&gt; true   numeric equality across types
+(identical? :a :a)          ;=&gt; true   keywords are interned</code></pre>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Because keywords and maps are literal syntax, configuration files, Ring routes, Reitit route tables,
+      Malli schemas and system definitions are all written as plain EDN data &mdash; the same notation you just
+      learned. One syntax for code, config, queries and API payloads.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>Temperature converter.</strong> Using <code>let</code>, convert
+      25&nbsp;&deg;C to Fahrenheit inside a REPL form, binding intermediate steps.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(let [celsius 25
+      fahrenheit (+ (* celsius 9/5) 32)]
+  fahrenheit)
+;=&gt; 77</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Predict, then verify.</strong> For each of <code>0</code>,
+      <code>""</code>, <code>[]</code>, <code>nil</code>, <code>false</code>, predict whether <code>(if v :t :f)</code>
+      yields <code>:t</code> or <code>:f</code>, then check yourself in the REPL.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(map #(if % :t :f) [0 "" [] nil false])
+;=&gt; (:t :t :t :f :f)     ; only nil/false are falsy</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Exact math.</strong> Compute one third plus one sixth twice:
+      once with ratios, once with doubles. Which would you trust for currency math?
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(+' 1/3 1/6)      ;=&gt; 1/2
+(+ 0.3333333333333333 0.16666666666666666)
+;=&gt; 0.49999999999999994
+;; In production you would reach for BigDecimal via interop (Module 08).</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Your first function template.</strong> Evaluate this and call it
+      three times (full treatment arrives in Module 04):
+      <pre><code class="language-clojure">(defn greet [name] (str "Hello, " name "!"))</code></pre>
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(greet "Ada")     ;=&gt; "Hello, Ada!"
+(greet "Linus")   ;=&gt; "Hello, Linus!"
+(greet "")        ;=&gt; "Hello, !"   ; empty string is still truthy</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 02</h2>
+      <form class="quiz" data-quiz="m02">
+        <fieldset class="q" data-answer="c">
+          <legend>1 &middot; Which values are falsy in Clojure?</legend>
+          <label><input type="radio" name="m02q1" value="a"><span><code>false</code>, <code>nil</code>, <code>0</code> and <code>""</code></span></label>
+          <label><input type="radio" name="m02q1" value="b"><span>Only <code>false</code></span></label>
+          <label><input type="radio" name="m02q1" value="c"><span>Only <code>false</code> and <code>nil</code></span></label>
+          <label><input type="radio" name="m02q1" value="d"><span><code>false</code>, <code>nil</code> and empty collections</span></label>
+          <div class="explain" hidden>Clojure has minimal falsiness: exactly <code>nil</code> and <code>false</code>. Zero and empty collections are truthy - unlike JavaScript or Python.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>2 &middot; What does <code>:status</code> evaluate to?</legend>
+          <label><input type="radio" name="m02q2" value="a"><span>Itself - keywords are self-evaluating constants</span></label>
+          <label><input type="radio" name="m02q2" value="b"><span>A lookup of a variable named status</span></label>
+          <label><input type="radio" name="m02q2" value="c"><span>The string "status"</span></label>
+          <div class="explain" hidden>Keywords evaluate to themselves, which makes them perfect stable tags and map keys.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>3 &middot; Why prefix notation like <code>(&lt; 1 2 3)</code>?</legend>
+          <label><input type="radio" name="m02q3" value="a"><span>Historical accident from the 1950s</span></label>
+          <label><input type="radio" name="m02q3" value="b"><span>To make code shorter only</span></label>
+          <label><input type="radio" name="m02q3" value="c"><span>It compiles faster</span></label>
+          <label><input type="radio" name="m02q3" value="d"><span>No precedence ambiguity, and operators take any number of operands</span></label>
+          <div class="explain" hidden>Prefix calls remove precedence rules entirely and let comparison/arithmetic operators be variadic.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>4 &middot; What is <code>(= 1/3 (/ 1 3))</code>?</legend>
+          <label><input type="radio" name="m02q4" value="a"><span>false - ratio vs double</span></label>
+          <label><input type="radio" name="m02q4" value="b"><span>true - both produce the exact ratio 1/3</span></label>
+          <label><input type="radio" name="m02q4" value="c"><span>true, because = coerces numbers</span></label>
+          <div class="explain" hidden><code>(/ 1 3)</code> returns the ratio <code>1/3</code>, not 0.333..., so both sides are identical values. Use <code>==</code> to compare numerically across types.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>5 &middot; What does <code>(def retries 3)</code> do?</legend>
+          <label><input type="radio" name="m02q5" value="a"><span>Declares a mutable variable</span></label>
+          <label><input type="radio" name="m02q5" value="b"><span>Creates a local binding visible in the enclosing block</span></label>
+          <label><input type="radio" name="m02q5" value="c"><span>Creates a Var named retries bound to 3 in the current namespace</span></label>
+          <div class="explain" hidden><code>def</code> interns a top-level Var. Locals come from <code>let</code> or function parameters.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m01-setup-and-repl.html"><span class="dir">&larr; PREV</span>Module 01 &middot; Setup &amp; the REPL</a>
+      <a class="next" href="m03-collections-immutability.html"><span class="dir">NEXT &rarr;</span>Module 03 &middot; Collections &amp; Immutability</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

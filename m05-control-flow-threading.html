@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Module 05 · Control Flow &amp; Threading Macros — Learn Clojure</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2363b132'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='%230d1117' font-family='monospace'%3E%CE%BB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-module="m05">
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="lambda">&lambda;</span> Learn Clojure</a>
+  <button id="menuBtn" type="button">Menu</button>
+  <nav class="topnav">
+    <a href="index.html">Overview</a>
+    <span class="progress-chip" id="progressChip">0/13 passed</span>
+  </nav>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <main class="content">
+    <nav class="crumbs"><a href="index.html">Course</a> &rsaquo; Phase 1 &middot; Foundations &rsaquo; <b>Module 05</b></nav>
+    <h1>Control Flow &amp; Threading Macros</h1>
+    <p class="subtitle">Branches, loops without loops, error strategies &mdash; and the macros that turn nested code into readable pipelines.</p>
+
+    <div class="box goals">
+      <div class="box-title">Goals</div>
+      <ul>
+        <li>Choose between <code>if</code>/<code>when</code>/<code>cond</code>/<code>case</code> correctly.</li>
+        <li>Iterate with <code>loop/recur</code> and <code>for</code> without stack overflow.</li>
+        <li>Handle errors with both exceptions and data.</li>
+        <li>Refactor nesting into pipelines with threading macros.</li>
+      </ul>
+    </div>
+
+    <h2>The branching family</h2>
+    <pre><code class="language-clojure">(if (&lt;= status 200) "ok" "problem")   ; one test, two branches
+
+(when (> score 90)                    ; body only when truthy; nil otherwise
+  (println "great!")
+  :gold-tier)                         ; implicit do: multiple expressions OK
+
+(if-let [user (find-user "ada")]      ; binds only when value is truthy
+  (str "welcome " (:name user))
+  "who?")
+
+(when-let [{:keys [email]} payload]   ; when + let combined - very common
+  (validate email))</code></pre>
+
+    <h2><code>cond</code>, <code>condp</code> and <code>case</code></h2>
+    <pre><code class="language-clojure">;; cond = chain of test/expr pairs, like Kotlin `when`:
+(defn grade [score]
+  (cond
+    (&gt;= score 90) :A
+    (&gt;= score 75) :B
+    (&gt;= score 60) :C
+    :else         :F))
+
+;; case = compile-time constants, fast, throws if nothing matches:
+(defn plan-price [tier]
+  (case tier
+    :free 0
+    :pro  9
+    :corp 99
+    49))                       ; optional default expression
+
+;; condp = binary-predicate chains:
+(defn size-of [n]
+  (condp &lt; n
+    10   :tiny
+    100  :small
+    1000 :medium
+    :large))                   ; first clause whose comparison wins</code></pre>
+    <div class="box warn">
+      <div class="box-title">Gotcha</div>
+      <p><code>case</code> clauses are constants &mdash; they are not evaluated at runtime.
+      <code>(case x (* 2 1) :two ...)</code> matches the <em>symbolic form</em>, not the number 2. Use
+      <code>cond</code>/<code>condp</code> when clauses need computing.</p>
+    </div>
+
+    <h2>Loops that aren't loops: <code>loop/recur</code></h2>
+    <p>The JVM lacks guaranteed tail-call optimization, so Clojure provides <code>recur</code>: a compiled
+    jump back to the enclosing <code>loop</code> (or <code>fn</code>) head &mdash; constant stack, no overflow:</p>
+    <pre><code class="language-clojure">(defn factorial [n]
+  (loop [acc 1
+         n   n]
+    (if (zero? n)
+      acc
+      (recur (* acc n) (dec n)))))   ; recur MUST be in tail position
+
+(factorial 5)     ;=&gt; 120
+(factorial 50000) ;=&gt; works fine - a plain recursive call would overflow</code></pre>
+    <p>Honestly: you will write <code>loop/recur</code> less than you think &mdash; most iteration becomes
+    <code>map/filter/reduce</code> (Module 06). It shines for state machines, parsers and retry logic.</p>
+
+    <h2>Iteration helpers and comprehensions</h2>
+    <pre><code class="language-clojure">(dotimes [i 3] (println i))              ; side-effecty counting
+
+(doseq [u users]                          ; for-each over a collection
+  (audit u))
+
+;; for = list comprehension, LAZY result:
+(for [x [1 2 3]
+      y [:a :b]]                          ; nested iteration
+  [x y])
+;=&gt; ([1 :a] [1 :b] [2 :a] [2 :b] [3 :a] [3 :b])
+
+(for [n (range 20)
+      :when (zero? (mod n 3))            ; filter inside the comprehension
+      :let  [sq (* n n)]]
+  [n sq])</code></pre>
+
+    <h2>Exceptions &mdash; and their alternative</h2>
+    <pre><code class="language-clojure">(try
+  (risky-operation)
+  (catch Exception e
+    (log/error (.getMessage e))
+    {:error :internal})
+  (finally
+    (cleanup!)))
+
+;; rich errors as data:
+(throw (ex-info "payment declined"
+                {:code 402 :provider "stripe"}))
+(try (declined!) (catch Exception e (ex-data e)))
+;=&gt; {:code 402, :provider "stripe"}
+
+;; resources close automatically - like try-with-resources / Kotlin use():
+(with-open [rdr (clojure.java.io/reader "data.csv")]
+  (count (line-seq rdr)))</code></pre>
+    <div class="box tip">
+      <div class="box-title">Errors as data vs exceptions</div>
+      <p>Clojure code often returns <code>{:error ...}</code> or <code>nil</code> for expected failures and
+      reserves exceptions for exceptional cases &mdash; closer in spirit to Kotlin's sealed
+      <code>Result&lt;T&gt;</code> types, but with plain maps instead of a type hierarchy. Ring middleware
+      (Module 10) converts exceptions into HTTP error responses centrally.</p>
+    </div>
+
+    <h2>Threading macros: killing the pyramid of doom</h2>
+    <p>Nested calls read inside-out. Threading macros rewrite them top-to-bottom. They are pure syntax
+    transformations &mdash; no runtime cost:</p>
+    <pre><code class="language-clojure">;; before:
+(str (clojure.string/capitalize (first (clojure.string/split "ada lovelace" #" "))))
+
+;; thread-first  -&gt;  inserts each step as the FIRST argument:
+(-&gt; "ada lovelace"
+    (clojure.string/split #" ")
+    first
+    clojure.string/capitalize)
+;=&gt; "Ada"
+
+;; thread-last  -&gt;&gt;  inserts each step as the LAST argument (collection fns):
+(-&gt;&gt; (range 20)
+     (filter odd?)
+     (map #(* % %))
+     (take 4))
+;=&gt; (1 9 25 49)
+
+;; some-&gt; stops early on nil - the null-safe navigation operator:
+(some-&gt; order :customer :address :city clojure.string/upper-case)
+;=&gt; nil-safe at every step, unlike -&gt;
+
+;; cond-&gt; threads conditionally:
+(cond-&gt; request
+  token   (assoc :auth token)        ; assoc only when token is truthy
+  debug?  (merge {:trace true}))
+
+;; doto - repeated ops on the same object (Java builder style):
+(doto (java.util.HashMap.)
+  (.put "a" 1)
+  (.put "b" 2))</code></pre>
+
+    <div class="box analogy">
+      <div class="box-title">Coming from Java/Kotlin</div>
+      <p><code>-&gt;</code> feels like method chaining (<code>req.getUser().getAddress()</code>) but works on any
+      function, and <code>-&gt;&gt;</code> reads like Unix pipes or Java Streams chained steps &mdash;
+      except it composes ordinary functions on ordinary collections. Kotlin's scope functions
+      (<code>let/run/also/apply</code>) cover similar ground; here they are macros, not methods, so nothing
+      special is required of your own functions.</p>
+    </div>
+
+    <div class="box usecase">
+      <div class="box-title">Where this is used for real</div>
+      <p>Real handlers read like threaded pipelines: validate &rarr; authorize &rarr; persist &rarr; respond.
+      Data-processing jobs are long <code>-&gt;&gt;</code> chains over lazy sequences (next module).
+      <code>some-&gt;</code> plus map lookups replaces entire null-check forests in integration layers.</p>
+    </div>
+
+    <h2>Tasks</h2>
+    <div class="task">
+      <span class="tnum">Task 1</span><strong>FizzBuzz, idiomatic.</strong> Return <code>:fizz</code>,
+      <code>:buzz</code>, <code>:fizzbuzz</code> or the number itself for n = 15.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(defn fizzbuzz [n]
+  (cond
+    (zero? (mod n 15)) :fizzbuzz
+    (zero? (mod n 3))  :fizz
+    (zero? (mod n 5))  :buzz
+    :else n))
+
+(map fizzbuzz (range 1 16))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 2</span><strong>Null-safe deep dive.</strong> Using <code>some-&gt;</code>, safely
+      uppercase <code>:city</code> from <code>(def o {:customer {:address {:city "berlin"}}})</code>; verify it
+      also returns nil for a missing customer.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(some-&gt; o :customer :address :city clojure.string/upper-case)
+;=&gt; "BERLIN"
+(some-&gt; {} :customer :address :city clojure.string/upper-case)
+;=&gt; nil</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 3</span><strong>Refactor to pipeline.</strong> Rewrite
+      <code>(reverse (sort (distinct coll)))</code> with <code>-&gt;&gt;</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(-&gt;&gt; coll distinct sort reverse)</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 4</span><strong>Countdown machine.</strong> Use <code>loop/recur</code> to print a
+      launch countdown from 5, then return <code>:liftoff</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(loop [n 5]
+  (if (pos? n)
+    (do (println n) (recur (dec n)))
+    :liftoff))</code></pre>
+      </details>
+    </div>
+    <div class="task">
+      <span class="tnum">Task 5</span><strong>Comprehension grid.</strong> Produce all pairs
+      <code>[x y]</code> from 0&ndash;9 where x &lt; y using <code>for</code> with <code>:when</code>.
+      <details class="solution"><summary>Solution</summary>
+        <pre><code class="language-clojure">(for [x (range 10)
+      y (range 10)
+      :when (&lt; x y)]
+  [x y])
+;=&gt; ([0 1] [0 2] ... [8 9])</code></pre>
+      </details>
+    </div>
+
+    <section class="exam">
+      <h2>Exam &middot; Module 05</h2>
+      <form class="quiz" data-quiz="m05">
+        <fieldset class="q" data-answer="b">
+          <legend>1 &middot; What does <code>recur</code> do?</legend>
+          <label><input type="radio" name="m05q1" value="a"><span>Spawns a new thread per call</span></label>
+          <label><input type="radio" name="m05q1" value="b"><span>Jumps to the loop/fn head without growing the stack</span></label>
+          <label><input type="radio" name="m05q1" value="c"><span>Retries the last exception</span></label>
+          <div class="explain" hidden>recur is a compiled tail call: constant stack space, no StackOverflowError. The compiler enforces its position in the body.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="c">
+          <legend>2 &middot; <code>(when x expr1 expr2)</code> returns&hellip;</legend>
+          <label><input type="radio" name="m05q2" value="a"><span>a boolean</span></label>
+          <label><input type="radio" name="m05q2" value="b"><span>the first expression's value</span></label>
+          <label><input type="radio" name="m05q2" value="c"><span>nil when x is falsy, otherwise expr2's value (last form)</span></label>
+          <div class="explain" hidden>when wraps an implicit do: run all body forms only if the test is truthy, evaluating to the last one; otherwise nil.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="b">
+          <legend>3 &middot; Which macro inserts each intermediate result as the LAST argument?</legend>
+          <label><input type="radio" name="m05q3" value="a"><span><code>-&gt;</code></span></label>
+          <label><input type="radio" name="m05q3" value="b"><span><code>-&gt;&gt;</code></span></label>
+          <label><input type="radio" name="m05q3" value="c"><span><code>doto</code></span></label>
+          <div class="explain" hidden>-&gt; threads first (good for maps/objects), -&gt;&gt; threads last (good for collection transforms like filter/map).</div>
+        </fieldset>
+        <fieldset class="q" data-answer="a">
+          <legend>4 &middot; <code>(some-&gt; m :a :b)</code> differs from <code>(-&gt; m :a :b)</code> how?</legend>
+          <label><input type="radio" name="m05q4" value="a"><span>It short-circuits to nil as soon as a step yields nil</span></label>
+          <label><input type="radio" name="m05q4" value="b"><span>It evaluates lazily</span></label>
+          <label><input type="radio" name="m05q4" value="c"><span>It catches exceptions too</span></label>
+          <div class="explain" hidden>some-> is the safe-navigation operator; plain -> happily threads nil along until something explodes.</div>
+        </fieldset>
+        <fieldset class="q" data-answer="d">
+          <legend>5 &middot; When does <code>case</code> fail at runtime?</legend>
+          <label><input type="radio" name="m05q5" value="a"><span>When clauses are variables</span></label>
+          <label><input type="radio" name="m05q5" value="b"><span>When there are more than 100 clauses</span></label>
+          <label><input type="radio" name="m05q5" value="c"><span>It never fails</span></label>
+          <label><input type="radio" name="m05q5" value="d"><span>When no constant matches and no default expression is given</span></label>
+          <div class="explain" hidden>case does constant matching and throws IllegalArgumentException without a default. cond/condp handle computed tests.</div>
+        </fieldset>
+        <div class="quiz-actions">
+          <button type="submit" class="btn">Submit exam</button>
+          <button type="button" class="btn secondary retake" hidden>Retake</button>
+        </div>
+        <div class="result" hidden></div>
+      </form>
+    </section>
+
+    <nav class="pager">
+      <a href="m04-functions-closures.html"><span class="dir">&larr; PREV</span>Module 04 &middot; Functions &amp; Closures</a>
+      <a class="next" href="m06-sequences-laziness-transducers.html"><span class="dir">NEXT &rarr;</span>Module 06 &middot; Sequences, Laziness &amp; Transducers</a>
+    </nav>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
